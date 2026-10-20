@@ -27,4 +27,28 @@ public sealed class Business
     public string TimeZoneId { get; private set; } = "";
     public DateTimeOffset TrialStartedAtUtc { get; private set; }
     public DateTimeOffset TrialEndsAtUtc { get; private set; }
+    public string Description { get; private set; } = "";
+    public string Location { get; private set; } = "";
+    public string PublicPhone { get; private set; } = "";
+    public string PublicEmail { get; private set; } = "";
+    public string LogoPath { get; private set; } = "";
+    public string CoverPath { get; private set; } = "";
+    public string PrimaryColor { get; private set; } = "#854f6c";
+    public string AccentColor { get; private set; } = "#f3e9ef";
+
+    /// <summary>Actualiza únicamente los datos que el negocio decidió hacer públicos.</summary>
+    public void UpdatePublicProfile(string description, string location, string publicPhone, string publicEmail,
+        string timeZoneId, string primaryColor, string accentColor)
+    {
+        Description = description.Trim();
+        Location = location.Trim();
+        PublicPhone = publicPhone.Trim();
+        PublicEmail = publicEmail.Trim();
+        TimeZoneId = timeZoneId;
+        PrimaryColor = primaryColor;
+        AccentColor = accentColor;
+    }
+
+    public void SetLogoPath(string path) => LogoPath = path;
+    public void SetCoverPath(string path) => CoverPath = path;
 }

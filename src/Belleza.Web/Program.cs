@@ -1,11 +1,20 @@
 using Belleza.Application.Businesses;
 using Belleza.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
+var uiCulture = CultureInfo.GetCultureInfo("es-MX");
+builder.Services.Configure<RequestLocalizationOptions>(options =>
+{
+    options.DefaultRequestCulture = new RequestCulture(uiCulture);
+    options.SupportedCultures = [uiCulture];
+    options.SupportedUICultures = [uiCulture];
+});
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
@@ -49,11 +58,14 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseRequestLocalization();
 app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+// El middleware atiende también imágenes que se cargan después de compilar la aplicación.
+app.UseStaticFiles();
 app.MapStaticAssets();
 
 app.MapControllerRoute(

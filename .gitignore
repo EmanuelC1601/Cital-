@@ -23,6 +23,7 @@ secrets.json
 *.db-wal
 *.log
 data/
+src/Belleza.Web/wwwroot/uploads/
 
 # Sistemas operativos
 .DS_Store
