@@ -28,6 +28,16 @@ public sealed class ManualPaymentRegistrationService(ApplicationDbContext db, Ti
             ?? throw new KeyNotFoundException("No existe la suscripción del negocio.");
         existing = await db.SubscriptionPayments.SingleOrDefaultAsync(x => x.IdempotencyKey == idempotency, token);
         if (existing is not null) { await tx.CommitAsync(token); return existing; }
+        var normalizedReference = reference.Trim();
+        existing = await db.SubscriptionPayments.SingleOrDefaultAsync(x => x.SubscriptionId == subscription.Id
+            && x.Reference == normalizedReference && x.ReversesPaymentId == null, token);
+        if (existing is not null)
+        {
+            if (existing.Amount != amount || !string.Equals(existing.Currency, currency, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("La referencia ya está asociada a otro importe o moneda.");
+            await tx.CommitAsync(token);
+            return existing;
+        }
 
         var now = clock.GetUtcNow();
         var lastPeriodEnd = await db.SubscriptionPeriods.Where(x => x.SubscriptionId == subscription.Id && x.Status == CoverageStatus.Granted)

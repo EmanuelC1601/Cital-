@@ -130,6 +130,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(x => x.IdempotencyKey).HasMaxLength(80).IsRequired();
             entity.Property(x => x.CorrectionReason).HasMaxLength(500).IsRequired();
             entity.HasIndex(x => x.IdempotencyKey).IsUnique();
+            entity.HasIndex(x => new { x.SubscriptionId, x.Reference }).IsUnique();
             entity.HasIndex(x => x.ReversesPaymentId).IsUnique().HasFilter("[ReversesPaymentId] IS NOT NULL");
             entity.HasOne<BusinessSubscription>().WithMany().HasForeignKey(x => x.SubscriptionId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<SubscriptionPeriod>().WithMany().HasForeignKey(x => x.PeriodId).OnDelete(DeleteBehavior.Restrict);

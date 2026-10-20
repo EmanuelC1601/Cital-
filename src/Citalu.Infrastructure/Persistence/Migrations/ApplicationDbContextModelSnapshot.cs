@@ -559,7 +559,8 @@ namespace Citalu.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("[ReversesPaymentId] IS NOT NULL");
 
-                    b.HasIndex("SubscriptionId");
+                    b.HasIndex("SubscriptionId", "Reference")
+                        .IsUnique();
 
                     b.ToTable("SubscriptionPayments");
                 });
