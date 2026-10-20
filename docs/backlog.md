@@ -13,12 +13,12 @@
 ## Entregas siguientes
 
 - [x] Entrega 2: CRUD de servicios, calendario de disponibilidad, perfil y página pública; migraciones aplicadas y persistencia verificada con SQL Server LocalDB.
+- [x] Entrega 3: motor de disponibilidad, reservas, agenda y gestión con enlaces privados; concurrencia, aislamiento y persistencia verificados contra SQL Server LocalDB.
 
-1. Entrega 3: motor de disponibilidad, reservas seguras y protección ante solapamientos simultáneos.
-2. Notificaciones durables con outbox y correos locales.
-3. Suscripciones, pagos manuales y panel de operación.
-4. Exportación de datos, métricas básicas y endurecimiento previo al lanzamiento.
-5. Enlaces para volver a reservar y lista de espera.
-6. Evaluación e integración de pasarela de pago.
+1. Entrega 4: notificaciones durables con outbox y correos locales.
+2. Suscripciones, pagos manuales y panel de operación.
+3. Exportación de datos, métricas básicas y endurecimiento previo al lanzamiento.
+4. Enlaces para volver a reservar y lista de espera.
+5. Evaluación e integración de pasarela de pago.
 
-Esta entrega no se despliega públicamente. Consulta [delivery-2](delivery-2.md) para sus verificaciones y límites.
+La entrega 3 no se despliega públicamente. Consulta [delivery-2](delivery-2.md) y [delivery-3](delivery-3.md) para sus verificaciones y límites.

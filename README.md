@@ -1,6 +1,6 @@
 # Belleza
 
-Asistente digital de citas para barberías, estéticas y profesionales de belleza. El producto se está construyendo por entregas; esta primera entrega cubre la cuenta del propietario y el registro inicial de un negocio.
+Agenda y reservas para barberías, estéticas y profesionales de belleza. Las entregas 1–3 incluyen cuenta del propietario, negocio, servicios, horarios, página pública y reservas con protección de solapamientos en SQL Server.
 
 ## Requisitos
 
@@ -26,7 +26,7 @@ Asistente digital de citas para barberías, estéticas y profesionales de bellez
 
 La migración no se ejecuta al iniciar la aplicación. Para producción, aplícala como paso explícito del despliegue después de respaldar y verificar el entorno. Las instrucciones para LocalDB y SQL Server Docker están en [persistencia](docs/persistence.md).
 
-La entrega 2 agrega catálogo de servicios, horarios y la página pública /b/{slug}. Su modelo, operación, migraciones y verificación de SQL Server están en [docs/delivery-2.md](docs/delivery-2.md). La página informa servicios y contacto; todavía no acepta reservas ni muestra horas reservables.
+La entrega 2 agrega catálogo, horarios y la página pública `/b/{slug}`. La [entrega 3](docs/delivery-3.md) agrega disponibilidad, reservas, agenda, enlaces privados y concurrencia SQL Server. Aún no están implementados notificaciones, pagos ni confirmación manual.
 
 ## Estructura
 
@@ -34,23 +34,23 @@ La entrega 2 agrega catálogo de servicios, horarios y la página pública /b/{s
 - `src/Belleza.Application`: casos de uso y contratos.
 - `src/Belleza.Infrastructure`: EF Core, Identity y SQL Server.
 - `src/Belleza.Web`: MVC, vistas, cookies de autenticación y composición de servicios.
-- `tests/Belleza.Application.Tests`: pruebas unitarias de reglas de aplicación.
+- `tests/Belleza.Application.Tests`: pruebas unitarias de reglas de aplicación y estados de cita.
 
 ## Arquitectura y aislamiento
 
-El producto es un monolito modular con dependencias hacia adentro: Web e Infrastructure conocen Application; Application conoce Domain. Cada negocio tiene identificador, propietario único, zona horaria explícita y slug único. En esta entrega el propietario se deriva del usuario autenticado y las lecturas del panel filtran por ese usuario. Los índices únicos de propietario y slug hacen cumplir las restricciones también en SQL Server.
+El producto es un monolito modular con dependencias hacia adentro: Web e Infrastructure conocen Application; Application conoce Domain. Cada negocio tiene propietario, zona horaria, slug y agenda aislados. Las páginas del propietario derivan el negocio del usuario autenticado y todas las lecturas y escrituras se filtran por negocio.
 
-Los filtros globales de EF no son la frontera de seguridad. Cada funcionalidad nueva debe obtener el negocio desde la identidad autorizada, filtrar explícitamente las lecturas y verificar pertenencia antes de modificar relaciones. Las pruebas actuales ejercitan reglas de alta; aún falta la batería de integración con SQL Server para aislamiento y solicitudes concurrentes.
+Los filtros globales de EF no son la frontera de seguridad. La disponibilidad se calcula en hora local y las citas se guardan en UTC con instantáneas. Las escrituras que afectan la agenda serializan por fila del negocio con `UPDLOCK, HOLDLOCK` dentro de una transacción SQL Server. Se verificó concurrencia y aislamiento contra LocalDB; consulta [entrega 3](docs/delivery-3.md) para el alcance y resultados.
 
 ## Decisiones técnicas
 
 - .NET 10 LTS, ASP.NET Core MVC, Identity y EF Core 10.0.13.
-- SQL Server 2022; una base compartida y claves de negocio en las entidades.
+- SQL Server 2019 o posterior; la verificación se ejecutó en SQL Server 2019 Express LocalDB.
 - Un negocio por propietario en MVP, con entidad separada del usuario de Identity.
 - Prueba inicial de 30 días y zona horaria predeterminada `America/Mexico_City`.
-- Los valores comerciales, pagos, disponibilidad y reservas todavía no se exponen en esta entrega.
+- Disponibilidad y reservas se implementan en la entrega 3; pagos quedan pendientes.
 - La prueba de 30 días está representada por `TrialStartedAtUtc` y `TrialEndsAtUtc` en `Businesses`. Todavía no hay una entidad ni tabla de suscripciones/pagos.
-- Los enlaces públicos, imágenes, emails, agenda, suscripciones de pago y administración de plataforma quedan en el backlog.
+- Los correos, pagos, suscripciones y administración de plataforma quedan en el backlog.
 
 ## Seguridad conocida
 
@@ -68,6 +68,6 @@ La cadena de conexión y la contraseña local se leen desde variables de entorno
 
 ## Backlog
 
-**MVP:** catálogo y horarios; página pública; reservas y prevención de solapamientos; reprogramación y cancelación; outbox de correo; prueba y pagos manuales; exportación; panel operativo; pruebas de integración SQL Server y accesibilidad.
+**MVP:** catálogo y horarios; página pública; reservas y prevención de solapamientos SQL Server; reprogramación y cancelación. Pendiente: outbox de correo, pagos manuales, exportación, panel operativo, accesibilidad y pruebas de carga.
 
 **Mejoras:** volver a reservar, lista de espera, más profesionales, automatización de pagos y canales de notificación.
