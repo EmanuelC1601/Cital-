@@ -10,6 +10,7 @@ public sealed class AvailabilityCalculator(ApplicationDbContext db, TimeProvider
     public async Task<IReadOnlyList<TimeOnly>> GetSlotsAsync(Business business, Service service, DateOnly date,
         Guid? excludeAppointmentId, CancellationToken cancellationToken)
     {
+        // Las reglas son horas locales del negocio; los límites de anticipación y las citas se comparan en UTC.
         var zone = TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId);
         var now = clock.GetUtcNow();
         var localNow = TimeZoneInfo.ConvertTime(now, zone);
@@ -34,6 +35,7 @@ public sealed class AvailabilityCalculator(ApplicationDbContext db, TimeProvider
                 && (!excludeAppointmentId.HasValue || x.Id != excludeAppointmentId.Value))
             .ToListAsync(cancellationToken);
         var results = new List<TimeOnly>();
+        // El margen forma parte del espacio ocupado, aunque no cambie la duración visible de la cita.
         var occupiedMinutes = service.DurationMinutes + service.BufferMinutes;
         var earliestUtc = now.AddMinutes(business.MinimumAdvanceMinutes);
 
@@ -44,6 +46,7 @@ public sealed class AvailabilityCalculator(ApplicationDbContext db, TimeProvider
                 var end = time.AddMinutes(occupiedMinutes);
                 if (breaks.Any(p => p.Start < end && time < p.End) || blocks.Any(p => p.Start < end && time < p.End)) continue;
                 var local = date.ToDateTime(time, DateTimeKind.Unspecified);
+                // Se omiten horas locales inexistentes o repetidas durante cambios de horario estacional.
                 if (zone.IsInvalidTime(local) || zone.IsAmbiguousTime(local)) continue;
                 var startUtc = TimeZoneInfo.ConvertTimeToUtc(local, zone);
                 if (startUtc < earliestUtc.UtcDateTime) continue;

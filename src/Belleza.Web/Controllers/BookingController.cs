@@ -47,6 +47,7 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
             return Conflict(new { message = "Este intento de reserva ya tiene un estado final. Actualiza la página para iniciar una nueva solicitud." });
         if (duplicate is not null)
         {
+            // La copia cifrada permite repetir la respuesta sin guardar el enlace en claro ni emitir otro token.
             var existingToken = tokenProtector.Unprotect(duplicate.ManageTokenCiphertext);
             await tx.CommitAsync(token);
             return Json(Confirmation(business, duplicate, existingToken));
@@ -214,6 +215,7 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
         var owner = users.GetUserId(User);
         return await db.Businesses.SingleOrDefaultAsync(x => x.OwnerUserId == owner, token);
     }
+    // Todas las escrituras de agenda toman primero este bloqueo; evita carreras incluso si aún no existe una cita.
     private Task<Business?> LockBusinessAsync(Guid id, CancellationToken token) =>
         db.Businesses.FromSqlInterpolated($"SELECT * FROM dbo.Businesses WITH (UPDLOCK, HOLDLOCK) WHERE Id = {id}")
             .AsNoTracking().SingleOrDefaultAsync(token);
