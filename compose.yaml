@@ -20,7 +20,7 @@ services:
       context: .
       dockerfile: src/Citalu.Web/Dockerfile
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=Citalu;User Id=sa;Password=${MSSQL_SA_PASSWORD:?Crea .env desde .env.example};Encrypt=True;TrustServerCertificate=True"
       Application__PublicBaseUrl: ${APPLICATION_PUBLIC_BASE_URL:-http://localhost:8080}
@@ -31,6 +31,7 @@ services:
       Email__Smtp__Username: ${EMAIL_SMTP_USERNAME:-}
       Email__Smtp__Password: ${EMAIL_SMTP_PASSWORD:-}
       DataProtection__KeysPath: /var/lib/citalu-keys
+      Storage__UploadsPath: /var/lib/citalu-uploads
     ports:
       - "8080:8080"
     depends_on:
@@ -38,7 +39,9 @@ services:
         condition: service_healthy
     volumes:
       - web-data-protection:/var/lib/citalu-keys
+      - web-uploads:/var/lib/citalu-uploads
 
 volumes:
   sqlserver-data:
   web-data-protection:
+  web-uploads:

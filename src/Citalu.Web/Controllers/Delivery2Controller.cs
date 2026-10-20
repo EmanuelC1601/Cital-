@@ -11,7 +11,7 @@ namespace Citalu.Web.Controllers;
 
 [Authorize, Route("negocio")]
 public sealed class Delivery2Controller(ApplicationDbContext db, UserManager<IdentityUser> users,
-    IWebHostEnvironment environment) : Controller
+    IWebHostEnvironment environment, IConfiguration configuration) : Controller
 {
     // Cada pantalla de administración resuelve primero el negocio del usuario autenticado.
     private Task<Business?> OwnBusinessAsync(CancellationToken token) =>
@@ -209,7 +209,10 @@ public sealed class Delivery2Controller(ApplicationDbContext db, UserManager<Ide
         }
 
         // El nombre generado y la carpeta por negocio impiden rutas controladas por el cliente.
-        var folder = Path.Combine(environment.WebRootPath, "uploads", business.Id.ToString("N"));
+        var uploadsRoot = configuration["Storage:UploadsPath"];
+        if (string.IsNullOrWhiteSpace(uploadsRoot))
+            uploadsRoot = Path.Combine(environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot"), "uploads");
+        var folder = Path.Combine(Path.GetFullPath(uploadsRoot), business.Id.ToString("N"));
         Directory.CreateDirectory(folder);
         var fileName = $"{Guid.NewGuid():N}{extension}";
         var destination = Path.Combine(folder, fileName);
@@ -388,7 +391,8 @@ public sealed class Delivery2Controller(ApplicationDbContext db, UserManager<Ide
 }
 
 [AllowAnonymous, Route("b")]
-public sealed class PublicBusinessController(ApplicationDbContext db, Citalu.Web.Services.SubscriptionAccessService subscriptionAccess) : Controller
+public sealed class PublicBusinessController(ApplicationDbContext db, Citalu.Web.Services.SubscriptionAccessService subscriptionAccess,
+    IConfiguration configuration) : Controller
 {
     [HttpGet("{slug}/reservar")]
     public async Task<IActionResult> Book(string slug, CancellationToken token)
@@ -418,7 +422,9 @@ public sealed class PublicBusinessController(ApplicationDbContext db, Citalu.Web
     public async Task<IActionResult> Qr(string slug, CancellationToken token)
     {
         if (!await db.Businesses.AnyAsync(item => item.Slug == slug, token)) return NotFound();
-        var target = Url.Action(nameof(Index), "PublicBusiness", new { slug }, Request.Scheme, Request.Host.Value);
+        var canonicalBaseUrl = configuration["Application:PublicBaseUrl"]?.TrimEnd('/')
+            ?? "https://citalu.example.invalid";
+        var target = $"{canonicalBaseUrl}/b/{Uri.EscapeDataString(slug)}";
         using var generator = new QRCoder.QRCodeGenerator();
         using var data = generator.CreateQrCode(target!, QRCoder.QRCodeGenerator.ECCLevel.Q);
         var png = new QRCoder.PngByteQRCode(data).GetGraphic(8);

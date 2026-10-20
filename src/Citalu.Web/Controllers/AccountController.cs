@@ -167,7 +167,7 @@ public sealed class AccountController(UserManager<IdentityUser> users, SignInMan
 
     private string BuildAccountLink(string path, Dictionary<string, string?> query)
     {
-        var baseUrl = configuration["Application:PublicBaseUrl"]?.TrimEnd('/') ?? "http://localhost:5000";
+        var baseUrl = configuration["Application:PublicBaseUrl"]?.TrimEnd('/') ?? "https://citalu.example.invalid";
         return Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString($"{baseUrl}/cuenta/{path}", query);
     }
 

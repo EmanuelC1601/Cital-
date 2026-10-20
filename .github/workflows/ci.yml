@@ -41,6 +41,17 @@ jobs:
         run: dotnet ef migrations has-pending-model-changes --project src/Citalu.Infrastructure --startup-project src/Citalu.Web
       - name: Test
         run: dotnet test Citalu.sln --configuration Release --no-build
+      - name: Publish release package
+        run: |
+          dotnet publish src/Citalu.Web/Citalu.Web.csproj --configuration Release --no-restore --output artifacts/release/app
+          dotnet ef migrations script --idempotent --project src/Citalu.Infrastructure --startup-project src/Citalu.Web --output artifacts/release/migrations.sql
+          git rev-parse HEAD > artifacts/release/commit.txt
+      - name: Upload reviewable release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Citalu-${{ github.sha }}
+          path: artifacts/release/
+          if-no-files-found: error
       - name: Stop SQL Server
         if: always()
         run: docker rm --force citalu-sqlserver || true

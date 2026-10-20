@@ -10,10 +10,20 @@ using Citalu.Web.Controllers;
 using Citalu.Infrastructure.Notifications;
 using Citalu.Application.Notifications;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.FileProviders;
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Falla con nombres de opciones faltantes antes de abrir certificados o archivos configurados.
+ValidateOperationalConfiguration(builder.Configuration, builder.Environment);
+
 builder.Services.AddControllersWithViews();
+builder.Logging.ClearProviders();
+if (builder.Environment.IsDevelopment()) builder.Logging.AddConsole();
+else builder.Logging.AddJsonConsole();
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -80,10 +90,35 @@ builder.Services.AddHostedService<SubscriptionExpiryNotifier>();
 var dataProtectionPath = builder.Configuration["DataProtection:KeysPath"];
 if (builder.Environment.IsDevelopment() || !string.IsNullOrWhiteSpace(dataProtectionPath))
 {
-    // Claves fuera de Git: mantienen válidos los tokens entre reinicios de desarrollo.
-    var keyPath = dataProtectionPath ?? Path.Combine(builder.Environment.ContentRootPath, "data", "keys");
+    // Conserva el anillo y el ApplicationDiscriminator actuales para no invalidar cookies ni tokens.
+    var keyPath = string.IsNullOrWhiteSpace(dataProtectionPath)
+        ? Path.Combine(builder.Environment.ContentRootPath, "data", "keys")
+        : dataProtectionPath;
     Directory.CreateDirectory(keyPath);
-    builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyPath));
+    var protection = builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyPath));
+    if (builder.Environment.IsProduction())
+    {
+        var certificatePath = builder.Configuration["DataProtection:CertificatePath"]!;
+        var certificatePassword = builder.Configuration["DataProtection:CertificatePassword"]!;
+        var certificate = X509CertificateLoader.LoadPkcs12FromFile(certificatePath, certificatePassword);
+        if (!certificate.HasPrivateKey) throw new InvalidOperationException("The Data Protection certificate must include its private key.");
+        protection.ProtectKeysWithCertificate(certificate);
+    }
+}
+
+var forwardedHeadersEnabled = builder.Configuration.GetValue<bool>("ForwardedHeaders:Enabled");
+if (forwardedHeadersEnabled)
+{
+    var proxyAddresses = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.ForwardLimit = 1;
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+        foreach (var address in proxyAddresses)
+            if (IPAddress.TryParse(address, out var parsed)) options.KnownProxies.Add(parsed);
+    });
 }
 
 var app = builder.Build();
@@ -95,6 +130,7 @@ if (args.Contains("--create-platform-admin", StringComparer.Ordinal))
 }
 
 // Configure the HTTP request pipeline.
+if (forwardedHeadersEnabled) app.UseForwardedHeaders();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
@@ -112,7 +148,24 @@ app.UseAuthorization();
 
 // El middleware atiende también imágenes que se cargan después de compilar la aplicación.
 app.UseStaticFiles();
+var uploadsPath = builder.Configuration["Storage:UploadsPath"];
+if (string.IsNullOrWhiteSpace(uploadsPath))
+    uploadsPath = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"), "uploads");
+Directory.CreateDirectory(uploadsPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(Path.GetFullPath(uploadsPath)),
+    RequestPath = "/uploads"
+});
 app.MapStaticAssets();
+
+// Readiness solo comunica si la aplicación y SQL Server responden; no devuelve configuración ni datos.
+app.MapGet("/health/live", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+app.MapGet("/health/ready", async (ApplicationDbContext db, CancellationToken token) =>
+{
+    try { return await db.Database.CanConnectAsync(token) ? Results.Ok(new { status = "ready" }) : Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+    catch { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+}).AllowAnonymous();
 
 app.MapControllerRoute(
     name: "default",
@@ -162,6 +215,46 @@ static async Task BootstrapFirstPlatformAdminAsync(IServiceProvider services)
     if (!added.Succeeded) throw new InvalidOperationException("No se pudo asignar el rol de plataforma.");
     await tx.CommitAsync();
     Console.WriteLine("Administrador inicial creado. La contraseña no se guardó en la configuración.");
+}
+
+static void ValidateOperationalConfiguration(IConfiguration configuration, IHostEnvironment environment)
+{
+    if (!environment.IsProduction()) return;
+    var missing = new List<string>();
+    var connection = configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrWhiteSpace(connection)) missing.Add("ConnectionStrings:DefaultConnection");
+    else if (connection.Contains("(localdb)", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException("Production requires a SQL Server instance; LocalDB is not supported.");
+
+    var publicUrl = configuration["Application:PublicBaseUrl"];
+    if (!Uri.TryCreate(publicUrl, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps ||
+        !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) || uri.Host.EndsWith(".invalid", StringComparison.OrdinalIgnoreCase))
+        missing.Add("Application:PublicBaseUrl (absolute HTTPS canonical URL)");
+    var allowedHosts = configuration["AllowedHosts"]?.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
+    if (allowedHosts.Length == 0 || allowedHosts.Contains("*", StringComparer.Ordinal) ||
+        (Uri.TryCreate(publicUrl, UriKind.Absolute, out var canonical) && !allowedHosts.Contains(canonical.Host, StringComparer.OrdinalIgnoreCase)))
+        missing.Add("AllowedHosts (explicit host matching Application:PublicBaseUrl)");
+
+    if (!Path.IsPathFullyQualified(configuration["DataProtection:KeysPath"] ?? string.Empty)) missing.Add("DataProtection:KeysPath (absolute persistent protected storage path)");
+    if (!Path.IsPathFullyQualified(configuration["DataProtection:CertificatePath"] ?? string.Empty)) missing.Add("DataProtection:CertificatePath (PFX with private key outside Git)");
+    if (string.IsNullOrWhiteSpace(configuration["DataProtection:CertificatePassword"])) missing.Add("DataProtection:CertificatePassword (secret configuration)");
+    if (!Path.IsPathFullyQualified(configuration["Storage:UploadsPath"] ?? string.Empty)) missing.Add("Storage:UploadsPath (absolute persistent file storage path)");
+    if (string.IsNullOrWhiteSpace(configuration["Email:Smtp:Host"])) missing.Add("Email:Smtp:Host");
+    if (!int.TryParse(configuration["Email:Smtp:Port"], out var port) || port is < 1 or > 65535) missing.Add("Email:Smtp:Port");
+    if (string.IsNullOrWhiteSpace(configuration["Email:Smtp:From"])) missing.Add("Email:Smtp:From");
+    if (!string.IsNullOrWhiteSpace(configuration["Email:Smtp:Username"]) && string.IsNullOrWhiteSpace(configuration["Email:Smtp:Password"]))
+        missing.Add("Email:Smtp:Password (required when username is set)");
+    if (!configuration.GetValue<bool>("Email:Smtp:EnableSsl")) missing.Add("Email:Smtp:EnableSsl=true");
+
+    if (configuration.GetValue<bool>("ForwardedHeaders:Enabled"))
+    {
+        var proxies = configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+        if (proxies.Length == 0 || proxies.Any(address => !IPAddress.TryParse(address, out _)))
+            missing.Add("ForwardedHeaders:KnownProxies (valid trusted proxy IP addresses)");
+    }
+
+    if (missing.Count > 0)
+        throw new InvalidOperationException("Production configuration is incomplete or unsafe. Configure: " + string.Join(", ", missing));
 }
 
 // Expuesto para que las pruebas de integración puedan iniciar el host más adelante.

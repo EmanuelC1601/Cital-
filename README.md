@@ -70,6 +70,11 @@ La cadena de conexión y la contraseña local se leen desde variables de entorno
 
 ## Backlog
 
-**MVP:** catálogo y horarios; página pública; reservas y prevención de solapamientos SQL Server; reprogramación y cancelación. Pendiente: outbox de correo, pagos manuales, exportación, panel operativo, accesibilidad y pruebas de carga.
+**Implementado en las entregas 1–5:** catálogo y horarios; página pública; reservas protegidas contra solapamientos; notificaciones persistentes; suscripciones y pagos manuales. La entrega 6 prepara operación y piloto; compatibilidad del alojamiento, SMTP real, respaldo restaurado y carga sostenida siguen condicionados por el plan y configuración operativa.
 
 **Mejoras:** volver a reservar, lista de espera, más profesionales, automatización de pagos y canales de notificación.
+
+## Operación piloto
+
+- [Preparación operativa, configuración, copias, despliegue y pendientes](docs/pilot-readiness.md)
+- [Guía rápida para el dueño del negocio](docs/pilot-owner-guide.md)

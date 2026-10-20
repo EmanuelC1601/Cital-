@@ -94,10 +94,17 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
             .OrderBy(x => x.StartUtc).ToListAsync(token);
         var appointmentIds = appointments.Select(x => x.Id).ToArray();
         var mailStates = await db.EmailOutbox.Where(x => x.BusinessId == business.Id && x.AppointmentId.HasValue && appointmentIds.Contains(x.AppointmentId.Value))
-            .OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, x.AppointmentId, x.Status }).ToListAsync(token);
-        var statusNames = mailStates.GroupBy(x => x.AppointmentId!.Value).ToDictionary(group => group.Key, group => group.First().Status switch
-        { OutboxStatus.Pending or OutboxStatus.Processing => "Notificación en cola", OutboxStatus.Sent => "Notificación enviada", OutboxStatus.Failed => "Notificación pendiente de revisión", _ => "Notificación sustituida" });
-        var failedIds = mailStates.Where(x => x.Status == OutboxStatus.Failed).GroupBy(x => x.AppointmentId!.Value).ToDictionary(group => group.Key, group => group.First().Id);
+            .OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, x.AppointmentId, x.Status, x.AvailableAtUtc, x.CreatedAtUtc }).ToListAsync(token);
+        var now = clock.GetUtcNow();
+        // Un recordatorio futuro no debe ocultar que la confirmación de la cita ya se envió.
+        var statusNames = mailStates.GroupBy(x => x.AppointmentId!.Value).ToDictionary(group => group.Key, group =>
+            group.Any(x => x.Status == OutboxStatus.Failed) ? "Notificación pendiente de revisión" :
+            group.Any(x => x.Status == OutboxStatus.Processing) ? "Notificación en proceso" :
+            group.Any(x => x.Status == OutboxStatus.Pending && x.AvailableAtUtc <= now) ? "Notificación en cola" :
+            group.Any(x => x.Status == OutboxStatus.Sent) ? "Notificación enviada" :
+            group.Any(x => x.Status == OutboxStatus.Pending) ? "Recordatorio programado" : "Notificación sustituida");
+        var failedIds = mailStates.Where(x => x.Status == OutboxStatus.Failed).GroupBy(x => x.AppointmentId!.Value)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(x => x.CreatedAtUtc).First().Id);
         return View(new OwnerAgendaPage(business.Name, business.TimeZoneId, selectedDate, appointments,
             await db.Services.Where(x => x.BusinessId == business.Id).OrderBy(x => x.Name).ToListAsync(token), new OwnerAppointmentInput { Date = selectedDate }, statusNames, failedIds));
     }
@@ -236,7 +243,7 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
                     var manageToken = appointment.TokenExpiresAtUtc <= current ? CreateToken() : UnprotectManageToken(appointment.ManageTokenCiphertext);
                     if (appointment.TokenExpiresAtUtc <= current)
                         appointment.RotateManageToken(Hash(manageToken), tokenProtector.Protect(manageToken), current.Add(TokenLifetime));
-                    var baseUrl = configuration["Application:PublicBaseUrl"]?.TrimEnd('/') ?? "http://localhost:5000";
+                    var baseUrl = configuration["Application:PublicBaseUrl"]?.TrimEnd('/') ?? "https://citalu.example.invalid";
                     var link = $"{baseUrl}/citas/gestionar#{manageToken}";
                     outbox.Enqueue(business!.Id, appointment.Id, appointment.CustomerEmail, "Recupera el enlace de tu cita en Citalú",
                         $"<p>Usa este enlace privado para consultar o gestionar tu cita: <a href=\"{System.Net.WebUtility.HtmlEncode(link)}\">abrir gestión</a>.</p>",
@@ -368,7 +375,7 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
         var version = appointment.UpdatedAtUtc ?? appointment.CreatedAtUtc;
         var local = TimeZoneInfo.ConvertTime(appointment.StartUtc, TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId));
         var details = $"{System.Net.WebUtility.HtmlEncode(appointment.ServiceNameSnapshot)} · ${appointment.PriceSnapshot:N2} · {local:dd/MM/yyyy HH:mm} ({System.Net.WebUtility.HtmlEncode(business.TimeZoneId)})";
-        var baseUrl = configuration["Application:PublicBaseUrl"]?.TrimEnd('/') ?? "http://localhost:5000";
+        var baseUrl = configuration["Application:PublicBaseUrl"]?.TrimEnd('/') ?? "https://citalu.example.invalid";
         var manageUrl = $"{baseUrl}/citas/gestionar#{manageToken}";
         QueueEmail(appointment, appointment.CustomerEmail, $"{eventName} de cita en Citalú",
             $"<p>Hola {System.Net.WebUtility.HtmlEncode(appointment.CustomerName)},</p><p>{details}</p><p><a href=\"{System.Net.WebUtility.HtmlEncode(manageUrl)}\">Consultar o gestionar cita</a></p>",
