@@ -18,6 +18,8 @@ Web contiene MVC, Identity y el arranque de dependencias. Application contiene c
 
 Las vistas del panel no aceptan un tenant enviado por navegador. Cada acción obtiene el negocio desde el principal autenticado y filtra las lecturas y escrituras por su `BusinessId`. La página anónima consulta por slug y devuelve campos expresamente públicos; no expone datos de citas, correo de Identity ni motivos de bloqueo. Los tokens de gestión se guardan como hash y se limitan a una cita.
 
+La entrega 5 agrega suscripción, periodos de cobertura, pagos manuales inmutables y auditoría. Las reglas de acceso a reservas se evalúan en el servidor con reloj controlable; no dependen del worker de avisos. Solo el rol de plataforma puede conceder cobertura.
+
 ## Concurrencia de citas
 
 Los endpoints que escriben agenda usan una transacción SQL Server y toman `UPDLOCK, HOLDLOCK` sobre la fila del negocio antes de comprobar disponibilidad. Esa fila es el mutex de escritura por tenant: serializa reserva pública, alta manual, reprogramación, cancelación y cambios de estado. La disponibilidad se valida otra vez dentro del bloqueo. Las escrituras de calendario que pueden quitar espacios adquieren el mismo bloqueo y rechazan conflictos con citas existentes. El detalle de reglas y pruebas está en [delivery-3](delivery-3.md).

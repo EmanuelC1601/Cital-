@@ -18,12 +18,101 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Microsoft.Extensions.Options;
 
 namespace Citalu.Integration.Tests;
 
 /// <summary>Estas pruebas crean una base efímera SQL Server; requieren CITALU_SQLSERVER_TEST_CONNECTION.</summary>
 public sealed class SqlServerOutboxTests
 {
+    [Fact]
+    public async Task TrialExpiresAtExactUtcBoundaryAndManualPaymentReactivatesOneCalendarMonthIdempotently()
+    {
+        await using var fixture = await SqlFixture.CreateAsync();
+        var (business, _) = await fixture.CreateAppointmentAsync();
+        var sub = await fixture.Db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == business.Id);
+        var time = new FrozenTimeProvider(sub.TrialEndsAtUtc.AddTicks(-1));
+        var options = Options.Create(new SubscriptionSettings { MonthlyPrice = 299m, Currency = "MXN", GraceDays = 0 });
+        var access = new SubscriptionAccessService(fixture.Db, time, options);
+        Assert.True((await access.GetAsync(business.Id, default)).CanBook);
+        time.Set(sub.TrialEndsAtUtc);
+        Assert.False((await access.GetAsync(business.Id, default)).CanBook);
+
+        var registration = new ManualPaymentRegistrationService(fixture.Db, time, options,
+            new OutboxQueue(fixture.Db, fixture.DataProtection));
+        var key = Guid.NewGuid();
+        var payment = await registration.RecordAsync(business.Id, 299m, "MXN", "ref-early-001", time.GetUtcNow(),
+            "platform-admin-test", key, default);
+        var repeated = await registration.RecordAsync(business.Id, 299m, "MXN", "ref-early-001", time.GetUtcNow(),
+            "platform-admin-test", key, default);
+        Assert.Equal(payment.Id, repeated.Id);
+        var period = await fixture.Db.SubscriptionPeriods.SingleAsync(x => x.Id == payment.PeriodId);
+        Assert.Equal(sub.TrialEndsAtUtc, period.StartsAtUtc);
+        Assert.Equal(period.StartsAtUtc.AddMonths(1), period.EndsAtUtc);
+        time.Set(period.StartsAtUtc);
+        Assert.True((await access.GetAsync(business.Id, default)).CanBook);
+        Assert.Equal(1, await fixture.Db.SubscriptionPayments.CountAsync(x => x.SubscriptionId == sub.Id));
+        Assert.Equal(1, await fixture.Db.SubscriptionPeriods.CountAsync(x => x.SubscriptionId == sub.Id));
+    }
+
+    [Fact]
+    public async Task LateManualPaymentStartsAtRecordingTimeAndDoesNotBackfillExpiredDays()
+    {
+        await using var fixture = await SqlFixture.CreateAsync();
+        var (business, _) = await fixture.CreateAppointmentAsync();
+        var now = DateTimeOffset.UtcNow;
+        var sub = await fixture.Db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == business.Id);
+        sub.MarkExpired();
+        // Use a past trial boundary, simulating a preserved historic trial.
+        await fixture.Db.Database.ExecuteSqlInterpolatedAsync($"UPDATE dbo.BusinessSubscriptions SET TrialEndsAtUtc = {now.AddDays(-4)}, TrialStartsAtUtc = {now.AddDays(-34)} WHERE Id = {sub.Id}");
+        fixture.Db.ChangeTracker.Clear();
+        var time = new FrozenTimeProvider(now);
+        var options = Options.Create(new SubscriptionSettings { MonthlyPrice = 299m, Currency = "MXN", GraceDays = 0 });
+        var access = new SubscriptionAccessService(fixture.Db, time, options);
+        Assert.False((await access.GetAsync(business.Id, default)).CanBook);
+        var registration = new ManualPaymentRegistrationService(fixture.Db, time, options, new OutboxQueue(fixture.Db, fixture.DataProtection));
+        var payment = await registration.RecordAsync(business.Id, 299m, "MXN", "ref-late-001", now.AddDays(-4), "platform-admin-test", Guid.NewGuid(), default);
+        var period = await fixture.Db.SubscriptionPeriods.SingleAsync(x => x.Id == payment.PeriodId);
+        Assert.Equal(now, period.StartsAtUtc);
+        Assert.Equal(now.AddMonths(1), period.EndsAtUtc);
+        Assert.True((await access.GetAsync(business.Id, default)).CanBook);
+    }
+
+    [Fact]
+    public async Task FailedPaymentCommitRollsBackPaymentCoverageAndNoticeInvalidationTogether()
+    {
+        await using var fixture = await SqlFixture.CreateAsync();
+        var (business, _) = await fixture.CreateAppointmentAsync();
+        var sub = await fixture.Db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == business.Id);
+        var queue = new OutboxQueue(fixture.Db, fixture.DataProtection);
+        var noticeKey = $"subscription:expiry:{business.Id:N}:{sub.TrialEndsAtUtc.UtcTicks}:7";
+        queue.Enqueue(business.Id, null, "owner@example.test", "vencimiento", "<p>aviso</p>", noticeKey, DateTimeOffset.UtcNow);
+        await queue.SaveAsync(default);
+        var options = Options.Create(new SubscriptionSettings { Currency = "MXN" });
+        var service = new ManualPaymentRegistrationService(fixture.Db, TimeProvider.System, options, queue);
+        await Assert.ThrowsAnyAsync<DbUpdateException>(() => service.RecordAsync(business.Id, 299m, "MXN", "atomic-ref",
+            DateTimeOffset.UtcNow, new string('x', 451), Guid.NewGuid(), default));
+        fixture.Db.ChangeTracker.Clear();
+        Assert.False(await fixture.Db.SubscriptionPayments.AnyAsync(x => x.SubscriptionId == sub.Id));
+        Assert.False(await fixture.Db.SubscriptionPeriods.AnyAsync(x => x.SubscriptionId == sub.Id));
+        Assert.Equal(OutboxStatus.Pending, await fixture.Db.EmailOutbox.Where(x => x.DeduplicationKey == noticeKey).Select(x => x.Status).SingleAsync());
+    }
+
+    [Fact]
+    public async Task SubscriptionAdminRequiresPlatformRoleAndOwnersCanOnlyReadOwnTenant()
+    {
+        var authorize = typeof(PlatformSubscriptionAdminController).GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), true)
+            .Cast<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>().Single();
+        Assert.Equal(PlatformSubscriptionAdminController.AdminRole, authorize.Roles);
+        await using var fixture = await SqlFixture.CreateAsync();
+        var (first, _) = await fixture.CreateAppointmentAsync();
+        var (second, _) = await fixture.CreateAppointmentAsync();
+        var access = new SubscriptionAccessService(fixture.Db, TimeProvider.System, Options.Create(new SubscriptionSettings()));
+        Assert.True((await access.GetAsync(first.Id, default)).CanBook);
+        Assert.NotEqual(first.Id, second.Id);
+        var secondSubscription = await fixture.Db.BusinessSubscriptions.SingleAsync(s => s.BusinessId == second.Id);
+        Assert.False(await fixture.Db.SubscriptionPayments.AnyAsync(x => x.SubscriptionId == secondSubscription.Id));
+    }
     [Fact]
     public async Task SmtpFailureKeepsConfirmedAppointmentRetryableAndLaterCompletes()
     {
@@ -313,13 +402,20 @@ public sealed class SqlServerOutboxTests
 
     private static string Hash(string value) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
+    private sealed class FrozenTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        private DateTimeOffset value = now;
+        public override DateTimeOffset GetUtcNow() => value;
+        public void Set(DateTimeOffset next) => value = next;
+    }
+
     private sealed class MemoryTempDataProvider : ITempDataProvider
     {
         public IDictionary<string, object> LoadTempData(HttpContext context) => new Dictionary<string, object>();
         public void SaveTempData(HttpContext context, IDictionary<string, object> values) { }
     }
 
-    private sealed class ControllableEmailSender : IEmailSender
+    internal sealed class ControllableEmailSender : IEmailSender
     {
         private int sendCount;
         public bool FailNext { get; set; }
@@ -336,7 +432,7 @@ public sealed class SqlServerOutboxTests
         }
     }
 
-    private sealed class SqlFixture : IAsyncDisposable
+    internal sealed class SqlFixture : IAsyncDisposable
     {
         private readonly string connection;
         private readonly string prefix = $"integration-{Guid.NewGuid():N}:";
@@ -349,6 +445,7 @@ public sealed class SqlServerOutboxTests
         private readonly Dictionary<Guid, string> managementTokens = [];
         public ApplicationDbContext Db { get; }
         public string DeduplicationPrefix => prefix;
+        public string ConnectionString => connection;
         public IDataProtectionProvider DataProtection => rootServices.GetRequiredService<IDataProtectionProvider>();
 
         private SqlFixture(string connection, string keyDirectory)
@@ -383,7 +480,9 @@ public sealed class SqlServerOutboxTests
             var business = new Business(user.Id, "Negocio de integración", $"{slug}-{Guid.NewGuid():N}"[..Math.Min(64, $"{slug}-{Guid.NewGuid():N}".Length)], DateTimeOffset.UtcNow);
             businessIds.Add(business.Id);
             var service = new Citalu.Domain.Service(business.Id, "Servicio", "Prueba de persistencia", 250m, 30, 10);
-            Db.Users.Add(user); Db.Businesses.Add(business); Db.Services.Add(service); await Db.SaveChangesAsync();
+            Db.Users.Add(user); Db.Businesses.Add(business); Db.Services.Add(service);
+            Db.BusinessSubscriptions.Add(new BusinessSubscription(business.Id, business.TrialStartedAtUtc, business.TrialEndsAtUtc, "monthly"));
+            await Db.SaveChangesAsync();
             var token = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
             var ciphertext = DataProtection.CreateProtector("Citalu.AppointmentManagement.v1").Protect(token);
             var appointment = new Appointment(business.Id, service.Id, "Cliente prueba", "5550101000", "customer@example.test", DateTimeOffset.UtcNow.AddDays(3), 250m, 30, 10, service.Name, Hash(token), ciphertext, DateTimeOffset.UtcNow.AddDays(90), Hash(Guid.NewGuid().ToString()));
@@ -452,7 +551,7 @@ public sealed class SqlServerOutboxTests
             return provider.CreateScope();
         }
 
-        public (ServiceProvider Services, OutboxProcessor Processor, ControllableEmailSender Sender) CreateProcessor(ControllableEmailSender sender)
+        internal (ServiceProvider Services, OutboxProcessor Processor, ControllableEmailSender Sender) CreateProcessor(ControllableEmailSender sender)
         {
             var services = new ServiceCollection().AddLogging()
                 .AddDbContext<ApplicationDbContext>(o => o.UseSqlServer(connection))
@@ -481,6 +580,9 @@ public sealed class SqlServerOutboxTests
             await rootServices.DisposeAsync();
             await using var cleanup = NewDb();
             await cleanup.EmailOutbox.Where(x => x.DeduplicationKey.StartsWith(prefix)).ExecuteDeleteAsync();
+            foreach (var userId in userIds)
+                await cleanup.EmailOutbox.Where(x => x.DeduplicationKey.StartsWith($"account:password-reset:{userId}:")
+                    || x.DeduplicationKey.StartsWith($"account:email-confirm:{userId}:")).ExecuteDeleteAsync();
             await cleanup.Appointments.Where(x => appointmentIds.Contains(x.Id)).ExecuteDeleteAsync();
             await cleanup.Services.Where(x => businessIds.Contains(x.BusinessId)).ExecuteDeleteAsync();
             await cleanup.Businesses.Where(x => businessIds.Contains(x.Id)).ExecuteDeleteAsync();

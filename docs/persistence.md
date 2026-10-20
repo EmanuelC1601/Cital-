@@ -43,7 +43,7 @@ La variable de entorno no se guarda en Git. Para terminar la sesión, ciérrala 
 
 La migración `InitialIdentityAndBusiness` crea las tablas de ASP.NET Identity, `Businesses` y `__EFMigrationsHistory`. `Businesses` incluye el propietario, slug, zona horaria e inicio y fin de la prueba. Los índices únicos de slug y de propietario se aplican en SQL Server.
 
-En esta entrega todavía no existe una tabla `Subscriptions`: la prueba se representa con fechas en `Businesses`. La entidad de suscripción, su estado de acceso, los pagos y la auditoría se incorporarán en la entrega correspondiente.
+La prueba se representa históricamente en `Businesses.TrialStartedAtUtc` y `TrialEndsAtUtc`. La entrega 5 agrega `BusinessSubscriptions`, `SubscriptionPeriods`, `SubscriptionPayments` y `SubscriptionAudits`; su migración copia las fechas exactas desde `Businesses` sin reiniciar pruebas. Véase [delivery-5](delivery-5.md).
 
 No se aplica ninguna migración al arrancar la aplicación. Revisa y aplica cada migración explícitamente en desarrollo y como un paso controlado de despliegue.
 
