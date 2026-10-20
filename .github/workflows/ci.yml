@@ -18,5 +18,7 @@ jobs:
         run: dotnet restore Citalu.sln
       - name: Build
         run: dotnet build Citalu.sln --configuration Release --no-restore
+      - name: Check EF migration model
+        run: dotnet ef migrations has-pending-model-changes --project src/Citalu.Infrastructure --startup-project src/Citalu.Web
       - name: Test
         run: dotnet test Citalu.sln --configuration Release --no-build
