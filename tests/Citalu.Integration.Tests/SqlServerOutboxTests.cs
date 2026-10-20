@@ -44,13 +44,17 @@ public sealed class SqlServerOutboxTests
         var payment = await registration.RecordAsync(business.Id, 299m, "MXN", "ref-early-001", time.GetUtcNow(),
             "platform-admin-test", key, default);
         var repeated = await registration.RecordAsync(business.Id, 299m, "MXN", "ref-early-001", time.GetUtcNow(),
-            "platform-admin-test", key, default);
+            "platform-admin-test", Guid.NewGuid(), default);
         Assert.Equal(payment.Id, repeated.Id);
+        await Assert.ThrowsAsync<ArgumentException>(() => registration.RecordAsync(business.Id, 298m, "MXN", "ref-early-001",
+            time.GetUtcNow(), "platform-admin-test", Guid.NewGuid(), default));
         var period = await fixture.Db.SubscriptionPeriods.SingleAsync(x => x.Id == payment.PeriodId);
         Assert.Equal(sub.TrialEndsAtUtc, period.StartsAtUtc);
         Assert.Equal(period.StartsAtUtc.AddMonths(1), period.EndsAtUtc);
         time.Set(period.StartsAtUtc);
         Assert.True((await access.GetAsync(business.Id, default)).CanBook);
+        time.Set(period.EndsAtUtc);
+        Assert.False((await access.GetAsync(business.Id, default)).CanBook);
         Assert.Equal(1, await fixture.Db.SubscriptionPayments.CountAsync(x => x.SubscriptionId == sub.Id));
         Assert.Equal(1, await fixture.Db.SubscriptionPeriods.CountAsync(x => x.SubscriptionId == sub.Id));
     }
@@ -96,6 +100,67 @@ public sealed class SqlServerOutboxTests
         Assert.False(await fixture.Db.SubscriptionPayments.AnyAsync(x => x.SubscriptionId == sub.Id));
         Assert.False(await fixture.Db.SubscriptionPeriods.AnyAsync(x => x.SubscriptionId == sub.Id));
         Assert.Equal(OutboxStatus.Pending, await fixture.Db.EmailOutbox.Where(x => x.DeduplicationKey == noticeKey).Select(x => x.Status).SingleAsync());
+        Assert.False(await fixture.Db.SubscriptionAudits.AnyAsync(x => x.SubscriptionId == sub.Id));
+    }
+
+    [Fact]
+    public async Task ConcurrentPaymentRetriesWithTheSameReferenceCreateOnePaymentAndCoverage()
+    {
+        await using var fixture = await SqlFixture.CreateAsync();
+        var (business, _) = await fixture.CreateAppointmentAsync();
+        var sub = await fixture.Db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == business.Id);
+        var time = new FrozenTimeProvider(DateTimeOffset.UtcNow);
+        var settings = Options.Create(new SubscriptionSettings { Currency = "MXN", MonthlyPrice = 299m });
+        var reference = $"retry-{Guid.NewGuid():N}";
+
+        async Task<SubscriptionPayment> Record(Guid requestKey, string paymentReference)
+        {
+            await using var db = fixture.NewDb();
+            var service = new ManualPaymentRegistrationService(db, time, settings, new OutboxQueue(db, fixture.DataProtection));
+            return await service.RecordAsync(business.Id, 299m, "MXN", paymentReference, time.GetUtcNow(), "platform-admin-test", requestKey, default);
+        }
+
+        var attempts = await Task.WhenAll(Record(Guid.NewGuid(), reference), Record(Guid.NewGuid(), reference));
+        Assert.Equal(attempts[0].Id, attempts[1].Id);
+        Assert.Equal(1, await fixture.Db.SubscriptionPayments.CountAsync(x => x.SubscriptionId == sub.Id));
+        Assert.Equal(1, await fixture.Db.SubscriptionPeriods.CountAsync(x => x.SubscriptionId == sub.Id));
+        Assert.Equal(1, await fixture.Db.SubscriptionAudits.CountAsync(x => x.SubscriptionId == sub.Id));
+
+        var distinctPayments = await Task.WhenAll(Record(Guid.NewGuid(), $"{reference}-a"), Record(Guid.NewGuid(), $"{reference}-b"));
+        Assert.NotEqual(distinctPayments[0].Id, distinctPayments[1].Id);
+        var periods = await fixture.Db.SubscriptionPeriods.Where(x => x.SubscriptionId == sub.Id).OrderBy(x => x.StartsAtUtc).ToListAsync();
+        Assert.Equal(3, periods.Count);
+        Assert.Equal(periods[0].EndsAtUtc, periods[1].StartsAtUtc);
+        Assert.Equal(periods[1].EndsAtUtc, periods[2].StartsAtUtc);
+    }
+
+    [Fact]
+    public async Task SuccessfulPaymentInvalidatesOutdatedExpiryNoticesAtomically()
+    {
+        await using var fixture = await SqlFixture.CreateAsync();
+        var (business, _) = await fixture.CreateAppointmentAsync();
+        var sub = await fixture.Db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == business.Id);
+        var key = $"subscription:expiry:{business.Id:N}:{sub.TrialEndsAtUtc.UtcTicks}:7";
+        var queue = new OutboxQueue(fixture.Db, fixture.DataProtection);
+        queue.Enqueue(business.Id, null, "owner@example.test", "Vencimiento", "contenido sensible", key, DateTimeOffset.UtcNow);
+        await queue.SaveAsync(default);
+        var now = DateTimeOffset.UtcNow;
+        var claimedNotice = await fixture.Db.EmailOutbox.SingleAsync(x => x.DeduplicationKey == key);
+        claimedNotice.Claim(now.AddMinutes(2));
+        await fixture.Db.SaveChangesAsync();
+        var service = new ManualPaymentRegistrationService(fixture.Db, new FrozenTimeProvider(now),
+            Options.Create(new SubscriptionSettings { Currency = "MXN" }), queue);
+
+        await service.RecordAsync(business.Id, 299m, "MXN", $"pay-{Guid.NewGuid():N}", now, "platform-admin-test", Guid.NewGuid(), default);
+
+        fixture.Db.ChangeTracker.Clear();
+        var notice = await fixture.Db.EmailOutbox.SingleAsync(x => x.DeduplicationKey == key);
+        Assert.Equal(OutboxStatus.Superseded, notice.Status);
+        Assert.Empty(notice.Recipient);
+        Assert.Empty(notice.ProtectedBody);
+        Assert.Equal(1, await fixture.Db.SubscriptionPayments.CountAsync(x => x.SubscriptionId == sub.Id));
+        Assert.Equal(1, await fixture.Db.SubscriptionPeriods.CountAsync(x => x.SubscriptionId == sub.Id));
+        Assert.Equal(1, await fixture.Db.SubscriptionAudits.CountAsync(x => x.SubscriptionId == sub.Id));
     }
 
     [Fact]
@@ -446,6 +511,7 @@ public sealed class SqlServerOutboxTests
         public ApplicationDbContext Db { get; }
         public string DeduplicationPrefix => prefix;
         public string ConnectionString => connection;
+        public string KeyDirectory => keyDirectory;
         public IDataProtectionProvider DataProtection => rootServices.GetRequiredService<IDataProtectionProvider>();
 
         private SqlFixture(string connection, string keyDirectory)
@@ -585,6 +651,12 @@ public sealed class SqlServerOutboxTests
                     || x.DeduplicationKey.StartsWith($"account:email-confirm:{userId}:")).ExecuteDeleteAsync();
             await cleanup.Appointments.Where(x => appointmentIds.Contains(x.Id)).ExecuteDeleteAsync();
             await cleanup.Services.Where(x => businessIds.Contains(x.BusinessId)).ExecuteDeleteAsync();
+            var subscriptionIds = await cleanup.BusinessSubscriptions.Where(x => businessIds.Contains(x.BusinessId))
+                .Select(x => x.Id).ToListAsync();
+            await cleanup.SubscriptionAudits.Where(x => subscriptionIds.Contains(x.SubscriptionId)).ExecuteDeleteAsync();
+            await cleanup.SubscriptionPayments.Where(x => subscriptionIds.Contains(x.SubscriptionId)).ExecuteDeleteAsync();
+            await cleanup.SubscriptionPeriods.Where(x => subscriptionIds.Contains(x.SubscriptionId)).ExecuteDeleteAsync();
+            await cleanup.BusinessSubscriptions.Where(x => subscriptionIds.Contains(x.Id)).ExecuteDeleteAsync();
             await cleanup.Businesses.Where(x => businessIds.Contains(x.Id)).ExecuteDeleteAsync();
             await cleanup.Users.Where(x => userIds.Contains(x.Id)).ExecuteDeleteAsync();
             if (Directory.Exists(keyDirectory)) Directory.Delete(keyDirectory, true);
