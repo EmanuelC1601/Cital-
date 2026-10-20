@@ -13,6 +13,7 @@
     <div class="col-md-6"><label class="form-label" asp-for="Input.TimeZoneId">Zona horaria</label><input class="form-control" asp-for="Input.TimeZoneId" list="timeZoneOptions" placeholder="Busca por ciudad o zona" /><datalist id="timeZoneOptions">@foreach(var zone in Model.TimeZones) { <option value="@zone.Id">@zone.DisplayName</option> }</datalist></div>
     <div class="col-md-3"><label class="form-label" asp-for="Input.PrimaryColor">Color principal</label><input class="form-control form-control-color w-100" asp-for="Input.PrimaryColor" type="color" /></div>
     <div class="col-md-3"><label class="form-label" asp-for="Input.AccentColor">Color de fondo</label><input class="form-control form-control-color w-100" asp-for="Input.AccentColor" type="color" /></div>
+    <div class="col-md-3"><label class="form-label" asp-for="Input.ReminderLeadHours">Recordatorio (horas antes)</label><input class="form-control" asp-for="Input.ReminderLeadHours" type="number" min="0" max="168" /><span class="form-text">0 desactiva los recordatorios.</span></div>
     <div class="col-12"><button class="btn btn-primary" type="submit">Guardar perfil</button></div>
 </form></section>
 <div class="row g-3">

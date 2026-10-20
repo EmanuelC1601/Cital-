@@ -5,6 +5,7 @@ using Citalu.Domain;
 using Citalu.Infrastructure.Persistence;
 using Citalu.Web.Models;
 using Citalu.Web.Services;
+using Citalu.Infrastructure.Notifications;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -16,7 +17,7 @@ namespace Citalu.Web.Controllers;
 
 [Route("citas")]
 public sealed class BookingController(ApplicationDbContext db, AvailabilityCalculator availability,
-    UserManager<IdentityUser> users, TimeProvider clock, IDataProtectionProvider dataProtection) : Controller
+    UserManager<IdentityUser> users, TimeProvider clock, IDataProtectionProvider dataProtection, OutboxQueue outbox, IConfiguration configuration) : Controller
 {
     private static readonly TimeSpan TokenLifetime = TimeSpan.FromDays(90);
     private readonly IDataProtector tokenProtector = dataProtection.CreateProtector("Citalu.AppointmentManagement.v1");
@@ -66,6 +67,12 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
             service.Name, Hash(manageToken), tokenProtector.Protect(manageToken), clock.GetUtcNow().Add(TokenLifetime), keyHash);
         db.Appointments.Add(appointment);
         db.AppointmentChanges.Add(new AppointmentChange(appointment.Id, business.Id, "Reservada", "Cliente", null, start));
+        await QueueAppointmentEmails(business, appointment, manageToken, "confirmación", token);
+        var reminderAt = start.AddHours(-business.ReminderLeadHours);
+        if (reminderAt > clock.GetUtcNow())
+            QueueEmail(appointment, appointment.CustomerEmail, "Recordatorio de tu cita",
+                $"<p>Te esperamos en {System.Net.WebUtility.HtmlEncode(business.Name)} para {System.Net.WebUtility.HtmlEncode(appointment.ServiceNameSnapshot)}.</p>",
+                $"appointment:{appointment.Id}:reminder:{appointment.StartUtc:O}", reminderAt, appointment.CreatedAtUtc);
         await db.SaveChangesAsync(token); await tx.CommitAsync(token);
         return Json(Confirmation(business, appointment, manageToken));
     }
@@ -80,8 +87,14 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
         var (from, until) = LocalDay(selectedDate, business);
         var appointments = await db.Appointments.Where(x => x.BusinessId == business.Id && x.StartUtc >= from && x.StartUtc < until)
             .OrderBy(x => x.StartUtc).ToListAsync(token);
+        var appointmentIds = appointments.Select(x => x.Id).ToArray();
+        var mailStates = await db.EmailOutbox.Where(x => x.BusinessId == business.Id && x.AppointmentId.HasValue && appointmentIds.Contains(x.AppointmentId.Value))
+            .OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, x.AppointmentId, x.Status }).ToListAsync(token);
+        var statusNames = mailStates.GroupBy(x => x.AppointmentId!.Value).ToDictionary(group => group.Key, group => group.First().Status switch
+        { OutboxStatus.Pending or OutboxStatus.Processing => "Notificación en cola", OutboxStatus.Sent => "Notificación enviada", OutboxStatus.Failed => "Notificación pendiente de revisión", _ => "Notificación sustituida" });
+        var failedIds = mailStates.Where(x => x.Status == OutboxStatus.Failed).GroupBy(x => x.AppointmentId!.Value).ToDictionary(group => group.Key, group => group.First().Id);
         return View(new OwnerAgendaPage(business.Name, business.TimeZoneId, selectedDate, appointments,
-            await db.Services.Where(x => x.BusinessId == business.Id).OrderBy(x => x.Name).ToListAsync(token), new OwnerAppointmentInput { Date = selectedDate }));
+            await db.Services.Where(x => x.BusinessId == business.Id).OrderBy(x => x.Name).ToListAsync(token), new OwnerAppointmentInput { Date = selectedDate }, statusNames, failedIds));
     }
 
     [Authorize, HttpPost("agenda/crear"), ValidateAntiForgeryToken]
@@ -128,6 +141,7 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
         }
         catch (InvalidOperationException) { return Conflict("La cita ya tiene un estado final."); }
         db.AppointmentChanges.Add(new AppointmentChange(item.Id, business!.Id, item.Status.ToString(), "Propietario", old, null));
+        await QueueAppointmentEmails(business, item, UnprotectManageToken(item.ManageTokenCiphertext), "cancelación", token);
         await db.SaveChangesAsync(token); await tx.CommitAsync(token);
         return RedirectToAction(nameof(Agenda), new { date });
     }
@@ -149,13 +163,65 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
         var start = LocalToUtc(date, time, business!); var newToken = CreateToken();
         appointment.Reschedule(start, Hash(newToken), tokenProtector.Protect(newToken), clock.GetUtcNow().Add(TokenLifetime));
         db.AppointmentChanges.Add(new AppointmentChange(appointment.Id, business!.Id, "Reprogramada", "Propietario", original, start));
+        await SupersedePendingEmails(appointment.Id, token);
+        await QueueAppointmentEmails(business, appointment, newToken, "reprogramación", token);
         await db.SaveChangesAsync(token); await tx.CommitAsync(token);
         TempData["ManageLink"] = $"/citas/gestionar#{newToken}";
         return RedirectToAction(nameof(Agenda), new { date });
     }
 
+    [Authorize, HttpPost("agenda/notificaciones/{id:guid}/reintentar"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> RetryNotification(Guid id, DateOnly date, CancellationToken token)
+    {
+        var business = await OwnedBusiness(token);
+        if (business is null) return NotFound();
+        var message = await db.EmailOutbox.SingleOrDefaultAsync(x => x.Id == id && x.BusinessId == business.Id, token);
+        if (message is null) return NotFound();
+        try { message.RetryNow(clock.GetUtcNow()); await db.SaveChangesAsync(token); TempData["Notice"] = "El correo quedó de nuevo en la cola."; }
+        catch (InvalidOperationException) { TempData["Error"] = "El contenido ya venció o ese correo no admite reintento."; }
+        return RedirectToAction(nameof(Agenda), new { date });
+    }
+
     [AllowAnonymous, HttpGet("gestionar")]
     public IActionResult Manage() => View();
+
+    [AllowAnonymous, HttpGet("recuperar-enlace")]
+    public IActionResult RecoverManageLink() => View(new RecoverManageLinkInput { RequestId = Guid.NewGuid() });
+
+    [AllowAnonymous, HttpPost("recuperar-enlace"), ValidateAntiForgeryToken, EnableRateLimiting("public-booking")]
+    public async Task<IActionResult> RecoverManageLink(RecoverManageLinkInput input, CancellationToken token)
+    {
+        if (ModelState.IsValid)
+        {
+            var candidate = await db.Appointments.SingleOrDefaultAsync(x => x.Id == input.AppointmentId, token);
+            if (candidate is not null && candidate.Status == AppointmentStatus.Confirmed &&
+                !string.IsNullOrWhiteSpace(candidate.CustomerEmail) &&
+                string.Equals(candidate.CustomerEmail, input.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
+                var business = await LockBusinessAsync(candidate.BusinessId, token);
+                var appointment = await db.Appointments.SingleOrDefaultAsync(x => x.Id == candidate.Id && x.BusinessId == business!.Id, token);
+                if (appointment is not null) await db.Entry(appointment).ReloadAsync(token);
+                if (appointment is not null && appointment.Status == AppointmentStatus.Confirmed &&
+                    string.Equals(appointment.CustomerEmail, input.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    var current = clock.GetUtcNow();
+                    var manageToken = appointment.TokenExpiresAtUtc <= current ? CreateToken() : UnprotectManageToken(appointment.ManageTokenCiphertext);
+                    if (appointment.TokenExpiresAtUtc <= current)
+                        appointment.RotateManageToken(Hash(manageToken), tokenProtector.Protect(manageToken), current.Add(TokenLifetime));
+                    var baseUrl = configuration["Application:PublicBaseUrl"]?.TrimEnd('/') ?? "http://localhost:5000";
+                    var link = $"{baseUrl}/citas/gestionar#{manageToken}";
+                    outbox.Enqueue(business!.Id, appointment.Id, appointment.CustomerEmail, "Recupera el enlace de tu cita en Citalú",
+                        $"<p>Usa este enlace privado para consultar o gestionar tu cita: <a href=\"{System.Net.WebUtility.HtmlEncode(link)}\">abrir gestión</a>.</p>",
+                        $"appointment:{appointment.Id}:manage-recovery:{input.RequestId:N}", current, appointment.UpdatedAtUtc ?? appointment.CreatedAtUtc);
+                    await db.SaveChangesAsync(token);
+                    await tx.CommitAsync(token);
+                }
+            }
+        }
+        ViewData["Message"] = "Si encontramos una cita con esos datos, enviaremos un enlace al correo asociado.";
+        return View("RecoveryMessage");
+    }
 
     [AllowAnonymous, HttpPost("gestionar/datos"), IgnoreAntiforgeryToken, EnableRateLimiting("public-booking")]
     public async Task<IActionResult> ManageData([FromBody] ManageCommand command, CancellationToken token)
@@ -194,6 +260,8 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
         {
             var old = appointment.StartUtc; appointment.Cancel();
             db.AppointmentChanges.Add(new AppointmentChange(appointment.Id, business!.Id, "Cancelada", "Cliente", old, null));
+            await SupersedePendingEmails(appointment.Id, token);
+            await QueueAppointmentEmails(business, appointment, UnprotectManageToken(appointment.ManageTokenCiphertext), "cancelación", token);
         }
         else if (command.Action == "reprogramar" && command.Date.HasValue && command.Time.HasValue)
         {
@@ -204,6 +272,8 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
             var next = LocalToUtc(command.Date.Value, command.Time.Value, business!); var old = appointment.StartUtc;
             var newToken = CreateToken(); appointment.Reschedule(next, Hash(newToken), tokenProtector.Protect(newToken), clock.GetUtcNow().Add(TokenLifetime));
             db.AppointmentChanges.Add(new AppointmentChange(appointment.Id, business!.Id, "Reprogramada", "Cliente", old, next));
+            await SupersedePendingEmails(appointment.Id, token);
+            await QueueAppointmentEmails(business, appointment, newToken, "reprogramación", token);
             await db.SaveChangesAsync(token); await tx.CommitAsync(token);
             return Json(new { ok = true, manageUrl = $"/citas/gestionar#{newToken}" });
         }
@@ -264,4 +334,30 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
         public Service ToService() => new(appointment.BusinessId, appointment.ServiceNameSnapshot, "", appointment.PriceSnapshot,
             appointment.DurationMinutesSnapshot, appointment.BufferMinutesSnapshot);
     }
+
+    private async Task QueueAppointmentEmails(Business business, Appointment appointment, string manageToken, string eventName, CancellationToken token)
+    {
+        var now = clock.GetUtcNow();
+        var version = appointment.UpdatedAtUtc ?? appointment.CreatedAtUtc;
+        var local = TimeZoneInfo.ConvertTime(appointment.StartUtc, TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId));
+        var details = $"{System.Net.WebUtility.HtmlEncode(appointment.ServiceNameSnapshot)} · ${appointment.PriceSnapshot:N2} · {local:dd/MM/yyyy HH:mm} ({System.Net.WebUtility.HtmlEncode(business.TimeZoneId)})";
+        var baseUrl = configuration["Application:PublicBaseUrl"]?.TrimEnd('/') ?? "http://localhost:5000";
+        var manageUrl = $"{baseUrl}/citas/gestionar#{manageToken}";
+        QueueEmail(appointment, appointment.CustomerEmail, $"{eventName} de cita en Citalú",
+            $"<p>Hola {System.Net.WebUtility.HtmlEncode(appointment.CustomerName)},</p><p>{details}</p><p><a href=\"{System.Net.WebUtility.HtmlEncode(manageUrl)}\">Consultar o gestionar cita</a></p>",
+            $"appointment:{appointment.Id}:customer:{eventName}:{version:O}", now, version);
+        var owner = await users.FindByIdAsync(business.OwnerUserId);
+        if (owner?.EmailConfirmed == true && !string.IsNullOrWhiteSpace(owner.Email))
+            QueueEmail(appointment, owner.Email, $"{eventName} · Citalú",
+                $"<p>Hay una {eventName}.</p><p>{details}</p><p><a href=\"{baseUrl}/citas/agenda\">Abrir agenda (requiere iniciar sesión)</a></p>",
+                $"appointment:{appointment.Id}:owner:{eventName}:{version:O}", now, version);
+    }
+
+    private void QueueEmail(Appointment appointment, string recipient, string subject, string html, string key, DateTimeOffset at, DateTimeOffset? version) =>
+        outbox.Enqueue(appointment.BusinessId, appointment.Id, recipient, subject, html, key, at, version);
+
+    private async Task SupersedePendingEmails(Guid appointmentId, CancellationToken token) => await db.EmailOutbox
+        .Where(x => x.AppointmentId == appointmentId && (x.Status == OutboxStatus.Pending || x.Status == OutboxStatus.Processing))
+        .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, OutboxStatus.Superseded)
+            .SetProperty(x => x.ProtectedBody, "").SetProperty(x => x.Recipient, "").SetProperty(x => x.Subject, ""), token);
 }

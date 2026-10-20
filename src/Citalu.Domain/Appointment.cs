@@ -48,6 +48,12 @@ public sealed class Appointment
         ManageTokenCiphertext = newTokenCiphertext;
         TokenExpiresAtUtc = tokenExpiresAtUtc.ToUniversalTime(); UpdatedAtUtc = DateTimeOffset.UtcNow;
     }
+    /// <summary>Rota el acceso vencido sin alterar el horario confirmado.</summary>
+    public void RotateManageToken(string newTokenHash, string newTokenCiphertext, DateTimeOffset tokenExpiresAtUtc)
+    {
+        EnsureActive(); ManageTokenHash = newTokenHash; ManageTokenCiphertext = newTokenCiphertext;
+        TokenExpiresAtUtc = tokenExpiresAtUtc.ToUniversalTime();
+    }
     public void Cancel() { EnsureActive(); Status = AppointmentStatus.Cancelled; UpdatedAtUtc = DateTimeOffset.UtcNow; }
     public void Complete(bool noShow)
     {

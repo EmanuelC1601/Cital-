@@ -29,7 +29,8 @@ public sealed record PublicBookingPage(string BusinessName, string Slug, string 
 public sealed record BookingConfirmation(string BusinessName, string ServiceName, decimal Price, int Duration,
     DateOnly Date, TimeOnly Time, string TimeZoneId, string ManageUrl, Guid Id);
 public sealed record OwnerAgendaPage(string BusinessName, string TimeZoneId, DateOnly Date,
-    IReadOnlyList<Appointment> Appointments, IReadOnlyList<Service> Services, OwnerAppointmentInput Input);
+    IReadOnlyList<Appointment> Appointments, IReadOnlyList<Service> Services, OwnerAppointmentInput Input,
+    IReadOnlyDictionary<Guid, string> NotificationStates, IReadOnlyDictionary<Guid, Guid> FailedNotificationIds);
 public sealed record ManageView(string BusinessName, string ServiceName, decimal Price, int Duration,
     DateOnly Date, TimeOnly Time, string TimeZoneId, string Status);
 
@@ -39,4 +40,11 @@ public sealed class ManageCommand
     public string Action { get; set; } = "";
     public DateOnly? Date { get; set; }
     public TimeOnly? Time { get; set; }
+}
+
+public sealed class RecoverManageLinkInput
+{
+    [Required] public Guid AppointmentId { get; set; }
+    [Required, EmailAddress, StringLength(254)] public string Email { get; set; } = "";
+    [Required] public Guid RequestId { get; set; }
 }

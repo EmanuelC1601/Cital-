@@ -151,7 +151,8 @@ public sealed class Delivery2Controller(ApplicationDbContext db, UserManager<Ide
         {
             Description = business.Description, Location = business.Location, PublicPhone = business.PublicPhone,
             PublicEmail = business.PublicEmail, TimeZoneId = business.TimeZoneId,
-            PrimaryColor = business.PrimaryColor, AccentColor = business.AccentColor
+            PrimaryColor = business.PrimaryColor, AccentColor = business.AccentColor,
+            ReminderLeadHours = business.ReminderLeadHours
         }, TimeZoneInfo.GetSystemTimeZones()
             .Prepend(TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId))
             .DistinctBy(zone => zone.Id)
@@ -181,6 +182,7 @@ public sealed class Delivery2Controller(ApplicationDbContext db, UserManager<Ide
         }
         business.UpdatePublicProfile(input.Description, input.Location, input.PublicPhone, input.PublicEmail,
             input.TimeZoneId, input.PrimaryColor, input.AccentColor);
+        business.UpdateReminderLeadHours(input.ReminderLeadHours);
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
         TempData["Notice"] = "Perfil público actualizado.";

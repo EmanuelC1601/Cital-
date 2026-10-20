@@ -40,6 +40,7 @@
     </header>
     <div class="container">
         <main role="main" class="pb-3">
+            @if (TempData["AccountMessage"] is string accountMessage) { <div class="alert alert-info mt-3" role="status">@accountMessage @if (TempData["NeedsConfirmation"] is true) { <a asp-controller="Account" asp-action="ResendConfirmation">Reenviar confirmación</a> }</div> }
             @RenderBody()
         </main>
     </div>

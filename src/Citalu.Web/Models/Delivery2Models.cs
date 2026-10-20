@@ -25,6 +25,7 @@ public sealed class ProfileInput
     [Required] public string TimeZoneId { get; set; } = "America/Mexico_City";
     [Required, RegularExpression("^#[0-9a-fA-F]{6}$")] public string PrimaryColor { get; set; } = "#854f6c";
     [Required, RegularExpression("^#[0-9a-fA-F]{6}$")] public string AccentColor { get; set; } = "#f3e9ef";
+    [Range(0, 168)] public int ReminderLeadHours { get; set; } = 24;
 }
 
 public sealed record ProfilePage(string BusinessName, string Slug, string LogoPath, string CoverPath,
