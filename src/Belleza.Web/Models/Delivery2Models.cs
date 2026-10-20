@@ -7,7 +7,7 @@ public sealed class ServiceInput
 {
     public Guid? Id { get; set; }
     [Required, StringLength(100)] public string Name { get; set; } = "";
-    [StringLength(500)] public string Description { get; set; } = "";
+    [StringLength(500)] public string? Description { get; set; }
     [Range(typeof(decimal), "0", "999999.99", ParseLimitsInInvariantCulture = true)] public decimal Price { get; set; }
     [Range(5, 480)] public int DurationMinutes { get; set; } = 60;
     [Range(0, 180)] public int BufferMinutes { get; set; }
@@ -56,7 +56,8 @@ public sealed class BlockedPeriodInput
 public sealed record SchedulePage(string BusinessName, IReadOnlyList<WeeklyWindow> Windows,
     IReadOnlyList<WeeklyBreak> Breaks, IReadOnlyList<ScheduleException> Exceptions,
     IReadOnlyList<BlockedPeriod> BlockedPeriods, WeeklyIntervalInput WindowInput,
-    WeeklyIntervalInput BreakInput, SpecialDateInput SpecialInput, BlockedPeriodInput BlockedInput);
+    WeeklyIntervalInput BreakInput, SpecialDateInput SpecialInput, BlockedPeriodInput BlockedInput,
+    int MinimumAdvanceMinutes, int MaximumBookingDays);
 
 public sealed record PublicService(string Name, string Description, decimal Price, int DurationMinutes);
 public sealed record PublicBusinessPage(string Name, string Slug, string Description, string Location,

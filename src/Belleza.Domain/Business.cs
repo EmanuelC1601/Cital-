@@ -35,6 +35,16 @@ public sealed class Business
     public string CoverPath { get; private set; } = "";
     public string PrimaryColor { get; private set; } = "#854f6c";
     public string AccentColor { get; private set; } = "#f3e9ef";
+    public int MinimumAdvanceMinutes { get; private set; } = 60;
+    public int MaximumBookingDays { get; private set; } = 60;
+
+    public void UpdateBookingLimits(int minimumAdvanceMinutes, int maximumBookingDays)
+    {
+        if (minimumAdvanceMinutes is < 0 or > 10080) throw new ArgumentOutOfRangeException(nameof(minimumAdvanceMinutes));
+        if (maximumBookingDays is < 1 or > 365) throw new ArgumentOutOfRangeException(nameof(maximumBookingDays));
+        MinimumAdvanceMinutes = minimumAdvanceMinutes;
+        MaximumBookingDays = maximumBookingDays;
+    }
 
     /// <summary>Actualiza únicamente los datos que el negocio decidió hacer públicos.</summary>
     public void UpdatePublicProfile(string description, string location, string publicPhone, string publicEmail,

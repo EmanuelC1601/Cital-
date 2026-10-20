@@ -4,10 +4,21 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
+using System.Threading.RateLimiting;
+using Belleza.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("public-booking", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 20, Window = TimeSpan.FromMinutes(10), QueueLimit = 0, AutoReplenishment = true
+        }));
+});
 var uiCulture = CultureInfo.GetCultureInfo("es-MX");
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
@@ -43,9 +54,11 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/cuenta/iniciar-sesion";
     options.AccessDeniedPath = "/cuenta/iniciar-sesion";
 });
+builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
 builder.Services.AddScoped<IBusinessStore, BusinessStore>();
 builder.Services.AddScoped<CreateBusinessHandler>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<AvailabilityCalculator>();
 
 var app = builder.Build();
 
@@ -60,6 +73,7 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseRequestLocalization();
 app.UseRouting();
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

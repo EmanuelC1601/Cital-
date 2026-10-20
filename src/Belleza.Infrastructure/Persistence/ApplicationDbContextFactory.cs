@@ -9,7 +9,7 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
     public ApplicationDbContext CreateDbContext(string[] args)
     {
         var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? "Server=localhost;Database=Belleza;User Id=sa;Password=OnlyForDesignTime!123;Encrypt=True;TrustServerCertificate=True";
+            ?? "Server=(localdb)\\MSSQLLocalDB;Database=BellezaDesignTime;Trusted_Connection=True;TrustServerCertificate=True";
         var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(connectionString).Options;
         return new ApplicationDbContext(options);
     }

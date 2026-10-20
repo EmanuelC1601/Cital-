@@ -2,6 +2,7 @@
 @{ ViewData["Title"] = "Servicios"; }
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 my-4"><div><p class="eyebrow mb-1">@Model.BusinessName</p><h1 class="display-6 fw-bold mb-0">Servicios</h1></div><a class="btn btn-outline-secondary" asp-controller="Business" asp-action="Index">Volver al negocio</a></div>
 @if (TempData["Notice"] is string notice) { <div class="alert alert-success">@notice</div> }
+@if (TempData["Error"] is string error) { <div class="alert alert-danger">@error</div> }
 <div asp-validation-summary="All" class="text-danger"></div>
 <details class="feature-card mb-4" open>
     <summary class="h5">Agregar un servicio</summary>

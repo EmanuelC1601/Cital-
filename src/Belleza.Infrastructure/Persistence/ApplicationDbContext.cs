@@ -15,6 +15,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<WeeklyBreak> WeeklyBreaks => Set<WeeklyBreak>();
     public DbSet<ScheduleException> ScheduleExceptions => Set<ScheduleException>();
     public DbSet<BlockedPeriod> BlockedPeriods => Set<BlockedPeriod>();
+    public DbSet<Appointment> Appointments => Set<Appointment>();
+    public DbSet<AppointmentChange> AppointmentChanges => Set<AppointmentChange>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -36,6 +38,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(business => business.CoverPath).HasMaxLength(400).IsRequired();
             entity.Property(business => business.PrimaryColor).HasMaxLength(7).HasDefaultValue("#854f6c").IsRequired();
             entity.Property(business => business.AccentColor).HasMaxLength(7).HasDefaultValue("#f3e9ef").IsRequired();
+            entity.Property(business => business.MinimumAdvanceMinutes).HasDefaultValue(60);
+            entity.Property(business => business.MaximumBookingDays).HasDefaultValue(60);
             entity.HasOne<IdentityUser>().WithMany().HasForeignKey(business => business.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
         });
         builder.Entity<Belleza.Domain.Service>(entity =>
@@ -53,6 +57,32 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
         ConfigureSchedule<BlockedPeriod>(builder, nameof(BlockedPeriod.BusinessId));
         builder.Entity<ScheduleException>().HasIndex(item => new { item.BusinessId, item.Date }).IsUnique();
         builder.Entity<BlockedPeriod>().Property(item => item.Reason).HasMaxLength(200).IsRequired();
+        builder.Entity<Appointment>(entity =>
+        {
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.CustomerName).HasMaxLength(120).IsRequired();
+            entity.Property(item => item.CustomerPhone).HasMaxLength(40).IsRequired();
+            entity.Property(item => item.CustomerEmail).HasMaxLength(254).IsRequired();
+            entity.Property(item => item.ServiceNameSnapshot).HasMaxLength(100).IsRequired();
+            entity.Property(item => item.PriceSnapshot).HasPrecision(8, 2);
+            entity.Property(item => item.ManageTokenHash).HasMaxLength(64).IsRequired();
+            entity.Property(item => item.ManageTokenCiphertext).HasMaxLength(500).IsRequired();
+            entity.Property(item => item.IdempotencyKeyHash).HasMaxLength(64).IsRequired();
+            entity.HasIndex(item => new { item.BusinessId, item.StartUtc });
+            entity.HasIndex(item => new { item.BusinessId, item.ManageTokenHash }).IsUnique();
+            entity.HasIndex(item => new { item.BusinessId, item.IdempotencyKeyHash }).IsUnique();
+            entity.HasOne<Business>().WithMany().HasForeignKey(item => item.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Belleza.Domain.Service>().WithMany().HasForeignKey(item => item.ServiceId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<AppointmentChange>(entity =>
+        {
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.ChangeType).HasMaxLength(30).IsRequired();
+            entity.Property(item => item.Actor).HasMaxLength(30).IsRequired();
+            entity.Property(item => item.Note).HasMaxLength(500).IsRequired();
+            entity.HasIndex(item => new { item.BusinessId, item.AppointmentId, item.CreatedAtUtc });
+            entity.HasOne<Appointment>().WithMany().HasForeignKey(item => item.AppointmentId).OnDelete(DeleteBehavior.Cascade);
+        });
     }
 
     private static void ConfigureSchedule<TEntity>(ModelBuilder builder, string businessKey) where TEntity : class
