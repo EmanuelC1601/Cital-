@@ -9,9 +9,12 @@ using Microsoft.Extensions.Logging;
 
 namespace Citalu.Infrastructure.Notifications;
 
-/// <summary>Worker durable: el arranque y el barrido periódico recuperan pendientes y leases vencidos.</summary>
+/// <summary>Worker durable: SQL guarda los trabajos y leases; el sondeo recupera trabajos tras reinicios.</summary>
 public sealed class OutboxProcessor(IServiceScopeFactory scopes, TimeProvider clock, ILogger<OutboxProcessor> logger) : BackgroundService
 {
+    private static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan LeaseRenewalInterval = TimeSpan.FromSeconds(30);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var nextRetentionSweep = DateTimeOffset.MinValue;
@@ -24,7 +27,7 @@ public sealed class OutboxProcessor(IServiceScopeFactory scopes, TimeProvider cl
                     await PurgeExpiredPayloads(stoppingToken);
                     nextRetentionSweep = clock.GetUtcNow().AddHours(1);
                 }
-                var worked = await ProcessOne(stoppingToken);
+                var worked = await ProcessOneAsync(stoppingToken);
                 if (!worked) await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
@@ -45,7 +48,8 @@ public sealed class OutboxProcessor(IServiceScopeFactory scopes, TimeProvider cl
                 .SetProperty(x => x.Recipient, "").SetProperty(x => x.Subject, ""), token);
     }
 
-    private async Task<bool> ProcessOne(CancellationToken token)
+    /// <summary>Una unidad de trabajo, expuesta para las pruebas SQL de integración.</summary>
+    internal async Task<bool> ProcessOneAsync(CancellationToken token, string? deduplicationKeyPrefix = null)
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -53,45 +57,129 @@ public sealed class OutboxProcessor(IServiceScopeFactory scopes, TimeProvider cl
         var sender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
         var now = clock.GetUtcNow();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
-        // READPAST omite filas reclamadas por otros workers; el lease permite recuperación tras una caída.
-        var claimedRows = await db.EmailOutbox.FromSqlInterpolated($"SELECT TOP (1) * FROM dbo.EmailOutbox WITH (UPDLOCK, READPAST, ROWLOCK) WHERE (Status = {(int)OutboxStatus.Pending} OR (Status = {(int)OutboxStatus.Processing} AND LockedUntilUtc < {now})) AND AvailableAtUtc <= {now} ORDER BY AvailableAtUtc, CreatedAtUtc")
+        var matchAllKeys = deduplicationKeyPrefix is null;
+        var keyPattern = deduplicationKeyPrefix + "%";
+        var claimedRows = await db.EmailOutbox.FromSqlInterpolated($"SELECT TOP (1) * FROM dbo.EmailOutbox WITH (UPDLOCK, READPAST, ROWLOCK) WHERE (Status = {(int)OutboxStatus.Pending} OR (Status = {(int)OutboxStatus.Processing} AND LockedUntilUtc < {now})) AND AvailableAtUtc <= {now} AND ({matchAllKeys} = 1 OR DeduplicationKey LIKE {keyPattern}) ORDER BY AvailableAtUtc, CreatedAtUtc")
             .ToListAsync(token);
         var item = claimedRows.SingleOrDefault();
         if (item is null) { await tx.CommitAsync(token); return false; }
-        item.Claim(now.AddMinutes(2));
+        item.Claim(now.Add(LeaseDuration));
+        var leaseId = item.LeaseId!.Value;
+        var id = item.Id;
+        var appointmentId = item.AppointmentId;
+        var businessId = item.BusinessId;
+        var version = item.AppointmentVersionUtc;
+        var deduplicationKey = item.DeduplicationKey;
+        var protectedBody = item.ProtectedBody;
+        var attempts = item.Attempts;
         await db.SaveChangesAsync(token);
         await tx.CommitAsync(token);
 
+        using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var renewal = RenewLeaseUntilStoppedAsync(id, leaseId, sendCts, token);
         try
         {
-            var payload = queue.Unprotect(item.ProtectedBody);
-            // La cancelación/reprogramación puede ocurrir mientras el worker prepara el mensaje.
-            // Revisa de nuevo la marca durable y la versión de cita justo antes de entregar al proveedor.
-            var currentOutboxStatus = await db.EmailOutbox.AsNoTracking().Where(x => x.Id == item.Id)
-                .Select(x => x.Status).SingleOrDefaultAsync(token);
-            if (currentOutboxStatus != OutboxStatus.Processing)
+            if (!await IsCurrentAsync(id, leaseId, appointmentId, version, deduplicationKey, token))
             {
-                item.Supersede(); await db.SaveChangesAsync(token); return true;
+                await CompleteSupersededAsync(id, leaseId, token);
+                return true;
             }
-            if (item.AppointmentId.HasValue)
-            {
-                var appointment = await db.Appointments.AsNoTracking().SingleOrDefaultAsync(x => x.Id == item.AppointmentId, token);
-                var cancellationNotice = item.DeduplicationKey.Contains(":cancelación:", StringComparison.Ordinal);
-                if (appointment is null || appointment.Status != AppointmentStatus.Confirmed && !(cancellationNotice && appointment.Status == AppointmentStatus.Cancelled) ||
-                    item.AppointmentVersionUtc.HasValue && (appointment.UpdatedAtUtc ?? appointment.CreatedAtUtc) != item.AppointmentVersionUtc)
-                {
-                    item.Supersede(); await db.SaveChangesAsync(token); return true;
-                }
-            }
-            await sender.SendAsync(new EmailMessage(payload.Recipient, payload.Subject, payload.Html, item.DeduplicationKey), token);
-            item.Sent(clock.GetUtcNow()); await db.SaveChangesAsync(token);
+            var payload = queue.Unprotect(protectedBody);
+            await sender.SendAsync(new EmailMessage(payload.Recipient, payload.Subject, payload.Html, deduplicationKey), sendCts.Token);
+            sendCts.Cancel();
+            await renewal;
+            // Fencing: an expired owner cannot overwrite the state written by a worker that reclaimed the row.
+            await CompleteSentAsync(id, leaseId, clock.GetUtcNow(), token);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
         {
-            // Solo tipo de fallo: las excepciones de proveedores suelen contener direcciones o contenido.
-            item.Retry(clock.GetUtcNow().AddSeconds(Math.Min(3600, Math.Pow(2, item.Attempts) * 15)), exception.GetType().Name);
-            await db.SaveChangesAsync(token);
+            // Lost lease: the new owner controls the row. Never record this owner's result.
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        {
+            sendCts.Cancel();
+            await renewal;
+            // Only the lease owner may record a failure; exception text may contain PII, so store type only.
+            await CompleteFailureAsync(id, leaseId, clock.GetUtcNow().AddSeconds(Math.Min(3600, Math.Pow(2, attempts) * 15)), exception.GetType().Name, token);
+        }
+        finally
+        {
+            sendCts.Cancel();
         }
         return true;
     }
+
+    private async Task RenewLeaseUntilStoppedAsync(Guid id, Guid leaseId, CancellationTokenSource sendCts, CancellationToken stoppingToken)
+    {
+        using var renewalCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, sendCts.Token);
+        while (!renewalCts.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(LeaseRenewalInterval, clock, renewalCts.Token);
+                using var scope = scopes.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var renewed = await db.EmailOutbox.Where(x => x.Id == id && x.Status == OutboxStatus.Processing && x.LeaseId == leaseId)
+                    .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.LockedUntilUtc, clock.GetUtcNow().Add(LeaseDuration)), renewalCts.Token);
+                if (renewed == 1) continue;
+
+                sendCts.Cancel();
+                return;
+            }
+            catch (OperationCanceledException) when (renewalCts.IsCancellationRequested) { return; }
+            catch (Exception exception)
+            {
+                // If ownership cannot be confirmed in SQL, stop delivery and let the durable lease expire/recover.
+                logger.LogWarning("No se pudo renovar un lease del outbox: {FailureType}", exception.GetType().Name);
+                sendCts.Cancel();
+                return;
+            }
+        }
+    }
+
+    private async Task<bool> IsCurrentAsync(Guid id, Guid leaseId, Guid? appointmentId, DateTimeOffset? version, string key, CancellationToken token)
+    {
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var item = await db.EmailOutbox.AsNoTracking().Where(x => x.Id == id && x.LeaseId == leaseId && x.Status == OutboxStatus.Processing)
+            .Select(x => new { x.BusinessId, x.Status }).SingleOrDefaultAsync(token);
+        if (item is null) return false;
+        if (!appointmentId.HasValue) return true;
+        var appointment = await db.Appointments.AsNoTracking().Where(x => x.Id == appointmentId && x.BusinessId == item.BusinessId)
+            .Select(x => new { x.Status, x.UpdatedAtUtc, x.CreatedAtUtc }).SingleOrDefaultAsync(token);
+        var cancellationNotice = key.Contains(":cancelación:", StringComparison.Ordinal);
+        return appointment is not null &&
+               (appointment.Status == AppointmentStatus.Confirmed || cancellationNotice && appointment.Status == AppointmentStatus.Cancelled) &&
+               (!version.HasValue || (appointment.UpdatedAtUtc ?? appointment.CreatedAtUtc) == version);
+    }
+
+    private async Task<int> CompleteSentAsync(Guid id, Guid leaseId, DateTimeOffset at, CancellationToken token)
+    {
+        using var scope = scopes.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.EmailOutbox.Where(x => x.Id == id && x.LeaseId == leaseId && x.Status == OutboxStatus.Processing)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, OutboxStatus.Sent).SetProperty(x => x.SentAtUtc, at)
+                .SetProperty(x => x.LockedUntilUtc, (DateTimeOffset?)null).SetProperty(x => x.LeaseId, (Guid?)null)
+                .SetProperty(x => x.ProtectedBody, "").SetProperty(x => x.Recipient, "").SetProperty(x => x.Subject, ""), token);
+    }
+
+    private async Task<int> CompleteSupersededAsync(Guid id, Guid leaseId, CancellationToken token)
+    {
+        using var scope = scopes.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.EmailOutbox.Where(x => x.Id == id && x.LeaseId == leaseId && x.Status == OutboxStatus.Processing)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, OutboxStatus.Superseded).SetProperty(x => x.LockedUntilUtc, (DateTimeOffset?)null)
+                .SetProperty(x => x.LeaseId, (Guid?)null).SetProperty(x => x.ProtectedBody, "")
+                .SetProperty(x => x.Recipient, "").SetProperty(x => x.Subject, ""), token);
+    }
+
+    private async Task<int> CompleteFailureAsync(Guid id, Guid leaseId, DateTimeOffset retryAt, string failure, CancellationToken token)
+    {
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.EmailOutbox.Where(x => x.Id == id && x.LeaseId == leaseId && x.Status == OutboxStatus.Processing)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, x => x.Attempts >= 8 ? OutboxStatus.Failed : OutboxStatus.Pending)
+                .SetProperty(x => x.AvailableAtUtc, retryAt).SetProperty(x => x.LockedUntilUtc, (DateTimeOffset?)null)
+                .SetProperty(x => x.LeaseId, (Guid?)null).SetProperty(x => x.LastFailure, failure), token);
+    }
+
 }

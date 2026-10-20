@@ -26,17 +26,18 @@ public sealed class EmailOutboxMessage
     public OutboxStatus Status { get; private set; }
     public int Attempts { get; private set; }
     public DateTimeOffset? LockedUntilUtc { get; private set; }
+    public Guid? LeaseId { get; private set; }
     public string LastFailure { get; private set; } = "";
     public DateTimeOffset? SentAtUtc { get; private set; }
-    public void Claim(DateTimeOffset until) { Status = OutboxStatus.Processing; LockedUntilUtc = until; Attempts++; }
-    public void Retry(DateTimeOffset when, string reason) { Status = Attempts >= 8 ? OutboxStatus.Failed : OutboxStatus.Pending; AvailableAtUtc = when; LockedUntilUtc = null; LastFailure = reason[..Math.Min(reason.Length, 500)]; }
-    public void Sent(DateTimeOffset at) { Status = OutboxStatus.Sent; SentAtUtc = at; LockedUntilUtc = null; ProtectedBody = ""; Recipient = ""; Subject = ""; }
-    public void Supersede() { Status = OutboxStatus.Superseded; LockedUntilUtc = null; ProtectedBody = ""; Recipient = ""; Subject = ""; }
+    public void Claim(DateTimeOffset until) { Status = OutboxStatus.Processing; LockedUntilUtc = until; LeaseId = Guid.NewGuid(); Attempts++; }
+    public void Retry(DateTimeOffset when, string reason) { Status = Attempts >= 8 ? OutboxStatus.Failed : OutboxStatus.Pending; AvailableAtUtc = when; LockedUntilUtc = null; LeaseId = null; LastFailure = reason[..Math.Min(reason.Length, 500)]; }
+    public void Sent(DateTimeOffset at) { Status = OutboxStatus.Sent; SentAtUtc = at; LockedUntilUtc = null; LeaseId = null; ProtectedBody = ""; Recipient = ""; Subject = ""; }
+    public void Supersede() { Status = OutboxStatus.Superseded; LockedUntilUtc = null; LeaseId = null; ProtectedBody = ""; Recipient = ""; Subject = ""; }
     public void RetryNow(DateTimeOffset now)
     {
         if (Status != OutboxStatus.Failed || string.IsNullOrWhiteSpace(ProtectedBody))
             throw new InvalidOperationException("El mensaje ya no se puede reintentar.");
-        Status = OutboxStatus.Pending; Attempts = 0; AvailableAtUtc = now; LockedUntilUtc = null; LastFailure = "";
+        Status = OutboxStatus.Pending; Attempts = 0; AvailableAtUtc = now; LockedUntilUtc = null; LeaseId = null; LastFailure = "";
     }
 }
 

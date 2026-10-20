@@ -2,6 +2,7 @@ using System.Text.Json;
 using Citalu.Domain;
 using Citalu.Infrastructure.Persistence;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
 
 namespace Citalu.Infrastructure.Notifications;
 
@@ -24,5 +25,13 @@ public sealed class OutboxQueue(ApplicationDbContext db, IDataProtectionProvider
 
     public CapturedPayload Unprotect(string encrypted) => JsonSerializer.Deserialize<CapturedPayload>(protector.Unprotect(encrypted))!;
     public Task SaveAsync(CancellationToken token) => db.SaveChangesAsync(token);
+
+    /// <summary>Invalida avisos aún no entregados cuando cambia la cita y borra sus datos sensibles.</summary>
+    public Task<int> SupersedeAppointmentMessagesAsync(Guid appointmentId, CancellationToken token) => db.EmailOutbox
+        .Where(x => x.AppointmentId == appointmentId && (x.Status == OutboxStatus.Pending || x.Status == OutboxStatus.Processing))
+        .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, OutboxStatus.Superseded)
+            .SetProperty(x => x.ProtectedBody, "").SetProperty(x => x.Recipient, "").SetProperty(x => x.Subject, "")
+            .SetProperty(x => x.LockedUntilUtc, (DateTimeOffset?)null).SetProperty(x => x.LeaseId, (Guid?)null), token);
+
     public sealed record CapturedPayload(string Recipient, string Subject, string Html);
 }

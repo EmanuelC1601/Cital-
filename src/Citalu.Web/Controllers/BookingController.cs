@@ -356,8 +356,6 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
     private void QueueEmail(Appointment appointment, string recipient, string subject, string html, string key, DateTimeOffset at, DateTimeOffset? version) =>
         outbox.Enqueue(appointment.BusinessId, appointment.Id, recipient, subject, html, key, at, version);
 
-    private async Task SupersedePendingEmails(Guid appointmentId, CancellationToken token) => await db.EmailOutbox
-        .Where(x => x.AppointmentId == appointmentId && (x.Status == OutboxStatus.Pending || x.Status == OutboxStatus.Processing))
-        .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, OutboxStatus.Superseded)
-            .SetProperty(x => x.ProtectedBody, "").SetProperty(x => x.Recipient, "").SetProperty(x => x.Subject, ""), token);
+    private Task SupersedePendingEmails(Guid appointmentId, CancellationToken token) =>
+        outbox.SupersedeAppointmentMessagesAsync(appointmentId, token);
 }

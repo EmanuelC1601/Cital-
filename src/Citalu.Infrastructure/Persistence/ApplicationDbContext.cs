@@ -93,6 +93,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(item => item.ProtectedBody).HasMaxLength(12000).IsRequired();
             entity.Property(item => item.DeduplicationKey).HasMaxLength(150).IsRequired();
             entity.Property(item => item.LastFailure).HasMaxLength(500).IsRequired();
+            entity.Property(item => item.LeaseId);
             entity.HasIndex(item => item.DeduplicationKey).IsUnique();
             entity.HasIndex(item => new { item.Status, item.AvailableAtUtc, item.LockedUntilUtc });
             entity.HasIndex(item => new { item.BusinessId, item.AppointmentId, item.Status });

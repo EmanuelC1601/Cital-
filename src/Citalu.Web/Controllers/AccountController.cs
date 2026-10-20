@@ -78,9 +78,26 @@ public sealed class AccountController(UserManager<IdentityUser> users, SignInMan
     public async Task<IActionResult> Confirm(string userId, string code)
     {
         var user = await users.FindByIdAsync(userId);
-        if (user is null || string.IsNullOrWhiteSpace(code)) return View("Message");
+        if (user is null || user.EmailConfirmed || string.IsNullOrWhiteSpace(code))
+        {
+            ViewData["Message"] = "El enlace no es válido o venció. Solicita uno nuevo.";
+            return View("Message");
+        }
+        await using var transaction = await db.Database.BeginTransactionAsync(HttpContext.RequestAborted);
         var result = await users.ConfirmEmailAsync(user, code);
-        ViewData["Message"] = result.Succeeded ? "Correo confirmado. Ya puedes usar tu cuenta." : "El enlace no es válido o venció. Solicita uno nuevo.";
+        if (result.Succeeded)
+        {
+            // Identity normalmente permite reutilizar un token mientras siga vigente; rotar el sello lo invalida.
+            var stampResult = await users.UpdateSecurityStampAsync(user);
+            if (stampResult.Succeeded) await transaction.CommitAsync(HttpContext.RequestAborted);
+            else await transaction.RollbackAsync(HttpContext.RequestAborted);
+            ViewData["Message"] = stampResult.Succeeded ? "Correo confirmado. Ya puedes usar tu cuenta." : "El enlace no es válido o venció. Solicita uno nuevo.";
+        }
+        else
+        {
+            await transaction.RollbackAsync(HttpContext.RequestAborted);
+            ViewData["Message"] = "El enlace no es válido o venció. Solicita uno nuevo.";
+        }
         return View("Message");
     }
 

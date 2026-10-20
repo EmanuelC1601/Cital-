@@ -320,6 +320,9 @@ namespace Citalu.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<Guid?>("LeaseId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTimeOffset?>("LockedUntilUtc")
                         .HasColumnType("datetimeoffset");
 
