@@ -4,9 +4,9 @@ Asistente digital de citas para barberías, estéticas y profesionales de bellez
 
 ## Requisitos
 
-- .NET SDK 10.0.13 o posterior de la línea 10.0.
-- Docker Desktop con Docker Compose.
-- SQL Server 2022 Developer para desarrollo (el contenedor incluido lo proporciona).
+- .NET SDK/runtime de la línea 10.0.
+- SQL Server 2019 o posterior; la instancia Docker incluida usa SQL Server 2022.
+- En Windows también puedes usar SQL Server LocalDB 2019 o posterior.
 
 .NET 10 es LTS y recibe soporte hasta el 14 de noviembre de 2028. La solución usa EF Core y su proveedor de SQL Server en 10.0.13 para mantenerse en la misma línea de soporte.
 
@@ -24,7 +24,7 @@ Asistente digital de citas para barberías, estéticas y profesionales de bellez
 4. Aplica la migración explícitamente: `dotnet tool restore` y `dotnet ef database update --project src/Belleza.Infrastructure --startup-project src/Belleza.Web`.
 5. Ejecuta `dotnet run --project src/Belleza.Web` y abre la URL HTTPS indicada por ASP.NET Core.
 
-La migración no se ejecuta al iniciar la aplicación. Para producción, aplícala como paso explícito del despliegue después de respaldar y verificar el entorno.
+La migración no se ejecuta al iniciar la aplicación. Para producción, aplícala como paso explícito del despliegue después de respaldar y verificar el entorno. Las instrucciones para LocalDB y SQL Server Docker están en [persistencia](docs/persistence.md).
 
 ## Estructura
 
@@ -47,6 +47,7 @@ Los filtros globales de EF no son la frontera de seguridad. Cada funcionalidad n
 - Un negocio por propietario en MVP, con entidad separada del usuario de Identity.
 - Prueba inicial de 30 días y zona horaria predeterminada `America/Mexico_City`.
 - Los valores comerciales, pagos, disponibilidad y reservas todavía no se exponen en esta entrega.
+- La prueba de 30 días está representada por `TrialStartedAtUtc` y `TrialEndsAtUtc` en `Businesses`. Todavía no hay una entidad ni tabla de suscripciones/pagos.
 - Los enlaces públicos, imágenes, emails, agenda, suscripciones de pago y administración de plataforma quedan en el backlog.
 
 ## Seguridad conocida
