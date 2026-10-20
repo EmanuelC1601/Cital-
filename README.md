@@ -26,6 +26,8 @@ Asistente digital de citas para barberías, estéticas y profesionales de bellez
 
 La migración no se ejecuta al iniciar la aplicación. Para producción, aplícala como paso explícito del despliegue después de respaldar y verificar el entorno. Las instrucciones para LocalDB y SQL Server Docker están en [persistencia](docs/persistence.md).
 
+La entrega 2 agrega catálogo de servicios, horarios y la página pública /b/{slug}. Su modelo, operación, migraciones y verificación de SQL Server están en [docs/delivery-2.md](docs/delivery-2.md). La página informa servicios y contacto; todavía no acepta reservas ni muestra horas reservables.
+
 ## Estructura
 
 - `src/Belleza.Domain`: entidades y reglas centrales, sin dependencias de infraestructura.
