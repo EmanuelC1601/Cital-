@@ -388,7 +388,7 @@ public sealed class Delivery2Controller(ApplicationDbContext db, UserManager<Ide
 }
 
 [AllowAnonymous, Route("b")]
-public sealed class PublicBusinessController(ApplicationDbContext db) : Controller
+public sealed class PublicBusinessController(ApplicationDbContext db, Citalu.Web.Services.SubscriptionAccessService subscriptionAccess) : Controller
 {
     [HttpGet("{slug}/reservar")]
     public async Task<IActionResult> Book(string slug, CancellationToken token)
@@ -396,8 +396,9 @@ public sealed class PublicBusinessController(ApplicationDbContext db) : Controll
         var business = await db.Businesses.SingleOrDefaultAsync(item => item.Slug == slug, token);
         if (business is null) return NotFound();
         var services = await db.Services.Where(item => item.BusinessId == business.Id && item.IsActive).OrderBy(item => item.Name).ToListAsync(token);
+        var subscription = await subscriptionAccess.GetAsync(business.Id, token);
         return View("Book", new Citalu.Web.Models.PublicBookingPage(business.Name, business.Slug, business.TimeZoneId,
-            business.Location, business.PublicPhone, business.PublicEmail, services, Guid.NewGuid()));
+            business.Location, business.PublicPhone, business.PublicEmail, services, Guid.NewGuid(), subscription.CanBook));
     }
 
     [HttpGet("{slug}")]
@@ -407,9 +408,10 @@ public sealed class PublicBusinessController(ApplicationDbContext db) : Controll
         if (business is null) return NotFound();
         var services = await db.Services.Where(item => item.BusinessId == business.Id && item.IsActive)
             .OrderBy(item => item.Name).Select(item => new PublicService(item.Name, item.Description, item.Price, item.DurationMinutes)).ToListAsync(token);
+        var subscription = await subscriptionAccess.GetAsync(business.Id, token);
         return View(new PublicBusinessPage(business.Name, business.Slug, business.Description, business.Location,
             business.PublicPhone, business.PublicEmail, business.TimeZoneId, business.LogoPath, business.CoverPath,
-            business.PrimaryColor, business.AccentColor, services));
+            business.PrimaryColor, business.AccentColor, services, subscription.CanBook));
     }
 
     [HttpGet("{slug}/qr.png")]

@@ -33,5 +33,13 @@ public sealed class OutboxQueue(ApplicationDbContext db, IDataProtectionProvider
             .SetProperty(x => x.ProtectedBody, "").SetProperty(x => x.Recipient, "").SetProperty(x => x.Subject, "")
             .SetProperty(x => x.LockedUntilUtc, (DateTimeOffset?)null).SetProperty(x => x.LeaseId, (Guid?)null), token);
 
+    /// <summary>Supersedes unexpired subscription notices when a payment changes the effective end date.</summary>
+    public Task<int> SupersedeSubscriptionNoticesAsync(Guid businessId, CancellationToken token) => db.EmailOutbox
+        .Where(x => x.BusinessId == businessId && x.AppointmentId == null && x.DeduplicationKey.StartsWith($"subscription:expiry:{businessId:N}:")
+            && (x.Status == OutboxStatus.Pending || x.Status == OutboxStatus.Processing))
+        .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, OutboxStatus.Superseded)
+            .SetProperty(x => x.ProtectedBody, "").SetProperty(x => x.Recipient, "").SetProperty(x => x.Subject, "")
+            .SetProperty(x => x.LockedUntilUtc, (DateTimeOffset?)null).SetProperty(x => x.LeaseId, (Guid?)null), token);
+
     public sealed record CapturedPayload(string Recipient, string Subject, string Html);
 }

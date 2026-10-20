@@ -18,6 +18,10 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<Appointment> Appointments => Set<Appointment>();
     public DbSet<AppointmentChange> AppointmentChanges => Set<AppointmentChange>();
     public DbSet<EmailOutboxMessage> EmailOutbox => Set<EmailOutboxMessage>();
+    public DbSet<BusinessSubscription> BusinessSubscriptions => Set<BusinessSubscription>();
+    public DbSet<SubscriptionPeriod> SubscriptionPeriods => Set<SubscriptionPeriod>();
+    public DbSet<SubscriptionPayment> SubscriptionPayments => Set<SubscriptionPayment>();
+    public DbSet<SubscriptionAudit> SubscriptionAudits => Set<SubscriptionAudit>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -97,6 +101,48 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.HasIndex(item => item.DeduplicationKey).IsUnique();
             entity.HasIndex(item => new { item.Status, item.AvailableAtUtc, item.LockedUntilUtc });
             entity.HasIndex(item => new { item.BusinessId, item.AppointmentId, item.Status });
+        });
+        builder.Entity<BusinessSubscription>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.BusinessId).IsUnique();
+            entity.Property(x => x.PlanCode).HasMaxLength(32).IsRequired();
+            entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<SubscriptionPeriod>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Amount).HasPrecision(10, 2);
+            entity.Property(x => x.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.PlanCode).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.GrantedByUserId).HasMaxLength(450).IsRequired();
+            entity.Property(x => x.RevocationReason).HasMaxLength(500).IsRequired();
+            entity.HasIndex(x => new { x.SubscriptionId, x.StartsAtUtc, x.EndsAtUtc });
+            entity.HasOne<BusinessSubscription>().WithMany().HasForeignKey(x => x.SubscriptionId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<SubscriptionPayment>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Amount).HasPrecision(10, 2);
+            entity.Property(x => x.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.Reference).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.RecordedByUserId).HasMaxLength(450).IsRequired();
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.CorrectionReason).HasMaxLength(500).IsRequired();
+            entity.HasIndex(x => x.IdempotencyKey).IsUnique();
+            entity.HasIndex(x => x.ReversesPaymentId).IsUnique().HasFilter("[ReversesPaymentId] IS NOT NULL");
+            entity.HasOne<BusinessSubscription>().WithMany().HasForeignKey(x => x.SubscriptionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<SubscriptionPeriod>().WithMany().HasForeignKey(x => x.PeriodId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<SubscriptionPayment>().WithMany().HasForeignKey(x => x.ReversesPaymentId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<SubscriptionAudit>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Action).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.ActorUserId).HasMaxLength(450).IsRequired();
+            entity.Property(x => x.Detail).HasMaxLength(1000).IsRequired();
+            entity.HasIndex(x => new { x.SubscriptionId, x.AtUtc });
+            entity.HasOne<BusinessSubscription>().WithMany().HasForeignKey(x => x.SubscriptionId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 

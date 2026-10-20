@@ -17,7 +17,8 @@ namespace Citalu.Web.Controllers;
 
 [Route("citas")]
 public sealed class BookingController(ApplicationDbContext db, AvailabilityCalculator availability,
-    UserManager<IdentityUser> users, TimeProvider clock, IDataProtectionProvider dataProtection, OutboxQueue outbox, IConfiguration configuration) : Controller
+    UserManager<IdentityUser> users, TimeProvider clock, IDataProtectionProvider dataProtection, OutboxQueue outbox, IConfiguration configuration,
+    Citalu.Web.Services.SubscriptionAccessService? subscriptionAccess = null) : Controller
 {
     private static readonly TimeSpan TokenLifetime = TimeSpan.FromDays(90);
     private readonly IDataProtector tokenProtector = dataProtection.CreateProtector("Citalu.AppointmentManagement.v1");
@@ -29,6 +30,8 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
     {
         var business = await db.Businesses.SingleOrDefaultAsync(x => x.Slug == slug, token);
         if (business is null) return NotFound();
+        if (subscriptionAccess is not null && !(await subscriptionAccess.GetAsync(business.Id, token)).CanBook)
+            return Json(new { date, slots = Array.Empty<TimeOnly>() });
         var service = await db.Services.SingleOrDefaultAsync(x => x.Id == serviceId && x.BusinessId == business.Id && x.IsActive, token);
         if (service is null) return NotFound();
         return Json(new { date, slots = await availability.GetSlotsAsync(business, service, date, null, token) });
@@ -43,6 +46,8 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
         business = await LockBusinessAsync(business.Id, token);
         if (business is null) return NotFound();
+        if (subscriptionAccess is not null && !(await subscriptionAccess.GetAsync(business.Id, token)).CanBook)
+        { await tx.RollbackAsync(token); return StatusCode(StatusCodes.Status423Locked, new { message = "Las reservas están temporalmente deshabilitadas. Contacta directamente con el negocio." }); }
 
         var keyHash = Hash(input.IdempotencyKey.ToString("N"));
         var duplicate = await db.Appointments.SingleOrDefaultAsync(x => x.BusinessId == business.Id && x.IdempotencyKeyHash == keyHash, token);
@@ -97,6 +102,26 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
             await db.Services.Where(x => x.BusinessId == business.Id).OrderBy(x => x.Name).ToListAsync(token), new OwnerAppointmentInput { Date = selectedDate }, statusNames, failedIds));
     }
 
+    [Authorize, HttpGet("agenda/exportar")]
+    public async Task<IActionResult> ExportAgenda(DateOnly? from, DateOnly? to, CancellationToken token)
+    {
+        var business = await OwnedBusiness(token); if (business is null) return NotFound();
+        var startDate = from ?? DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+        var endDate = to ?? startDate.AddDays(30);
+        if (endDate < startDate || endDate.DayNumber - startDate.DayNumber > 366) return BadRequest("El intervalo debe ser de hasta un año.");
+        var fromUtc = LocalToUtc(startDate, TimeOnly.MinValue, business);
+        var untilUtc = LocalToUtc(endDate.AddDays(1), TimeOnly.MinValue, business);
+        var rows = await db.Appointments.Where(x => x.BusinessId == business.Id && x.StartUtc >= fromUtc && x.StartUtc < untilUtc)
+            .OrderBy(x => x.StartUtc).ToListAsync(token);
+        static string Csv(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId);
+        var lines = new List<string> { "Fecha local,Servicio,Cliente,Teléfono,Correo,Estado,Precio,Moneda" };
+        lines.AddRange(rows.Select(x => string.Join(',', Csv(TimeZoneInfo.ConvertTime(x.StartUtc, zone).ToString("yyyy-MM-dd HH:mm")),
+            Csv(x.ServiceNameSnapshot), Csv(x.CustomerName), Csv(x.CustomerPhone), Csv(x.CustomerEmail), Csv(x.Status.ToString()),
+            x.PriceSnapshot.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), Csv("MXN"))));
+        return File(System.Text.Encoding.UTF8.GetBytes("\uFEFF" + string.Join("\r\n", lines)), "text/csv; charset=utf-8", "citalu-citas.csv");
+    }
+
     [Authorize, HttpPost("agenda/crear"), ValidateAntiForgeryToken]
     public async Task<IActionResult> Manual(OwnerAppointmentInput input, CancellationToken token)
     {
@@ -105,6 +130,8 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
         if (!ModelState.IsValid) { TempData["Error"] = "Revisa los datos de la cita."; return RedirectToAction(nameof(Agenda), new { date = input.Date }); }
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
         business = await LockBusinessAsync(business.Id, token);
+        if (subscriptionAccess is not null && !(await subscriptionAccess.GetAsync(business!.Id, token)).CanBook)
+        { await tx.RollbackAsync(token); TempData["Error"] = "El acceso venció; no puedes crear citas nuevas. Las citas existentes siguen disponibles."; return RedirectToAction(nameof(Agenda), new { date = input.Date }); }
         var service = await db.Services.SingleOrDefaultAsync(x => x.BusinessId == business!.Id && x.Id == input.ServiceId && x.IsActive, token);
         if (service is null) return BadRequest("Selecciona un servicio activo.");
         var slots = await availability.GetSlotsAsync(business!, service, input.Date, null, token);

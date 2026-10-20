@@ -63,4 +63,4 @@ public sealed record SchedulePage(string BusinessName, IReadOnlyList<WeeklyWindo
 public sealed record PublicService(string Name, string Description, decimal Price, int DurationMinutes);
 public sealed record PublicBusinessPage(string Name, string Slug, string Description, string Location,
     string PublicPhone, string PublicEmail, string TimeZoneId, string LogoPath, string CoverPath,
-    string PrimaryColor, string AccentColor, IReadOnlyList<PublicService> Services);
+    string PrimaryColor, string AccentColor, IReadOnlyList<PublicService> Services, bool CanBook);

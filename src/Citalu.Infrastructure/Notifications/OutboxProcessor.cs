@@ -145,7 +145,19 @@ public sealed class OutboxProcessor(IServiceScopeFactory scopes, TimeProvider cl
         var item = await db.EmailOutbox.AsNoTracking().Where(x => x.Id == id && x.LeaseId == leaseId && x.Status == OutboxStatus.Processing)
             .Select(x => new { x.BusinessId, x.Status }).SingleOrDefaultAsync(token);
         if (item is null) return false;
-        if (!appointmentId.HasValue) return true;
+        if (!appointmentId.HasValue)
+        {
+            if (!key.StartsWith("subscription:expiry:", StringComparison.Ordinal)) return true;
+            var parts = key.Split(':');
+            if (parts.Length != 5 || !Guid.TryParseExact(parts[2], "N", out var businessId) || !long.TryParse(parts[3], out var expectedTicks)
+                || item.BusinessId != businessId) return false;
+            var subscription = await db.BusinessSubscriptions.AsNoTracking().SingleOrDefaultAsync(x => x.BusinessId == businessId, token);
+            if (subscription is null) return false;
+            var paidEnd = await db.SubscriptionPeriods.AsNoTracking().Where(x => x.SubscriptionId == subscription.Id && x.Status == CoverageStatus.Granted)
+                .Select(x => (DateTimeOffset?)x.EndsAtUtc).MaxAsync(token);
+            var effectiveEnd = paidEnd.HasValue && paidEnd.Value > subscription.TrialEndsAtUtc ? paidEnd.Value : subscription.TrialEndsAtUtc;
+            return effectiveEnd.UtcTicks == expectedTicks;
+        }
         var appointment = await db.Appointments.AsNoTracking().Where(x => x.Id == appointmentId && x.BusinessId == item.BusinessId)
             .Select(x => new { x.Status, x.UpdatedAtUtc, x.CreatedAtUtc }).SingleOrDefaultAsync(token);
         var cancellationNotice = key.Contains(":cancelación:", StringComparison.Ordinal);

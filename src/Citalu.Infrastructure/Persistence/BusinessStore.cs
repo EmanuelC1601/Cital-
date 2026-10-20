@@ -16,6 +16,7 @@ public sealed class BusinessStore(ApplicationDbContext db) : IBusinessStore
     public async Task AddAsync(Business business, CancellationToken cancellationToken)
     {
         db.Businesses.Add(business);
+        db.BusinessSubscriptions.Add(new BusinessSubscription(business.Id, business.TrialStartedAtUtc, business.TrialEndsAtUtc, "monthly"));
         await db.SaveChangesAsync(cancellationToken);
     }
 }
