@@ -1,0 +1,29 @@
+﻿@{
+    ViewData["Title"] = "Agenda sencilla para tu negocio";
+}
+
+<section class="hero rounded-4 p-4 p-md-5 my-4">
+    <div class="row align-items-center g-4">
+        <div class="col-lg-7">
+            <p class="eyebrow mb-3">Tu tiempo, mejor organizado</p>
+            <h1 class="display-5 fw-bold">Una agenda clara para atender mejor.</h1>
+            <p class="lead text-secondary mt-3">Tus clientes consultan tus servicios y reservan en línea. Tú ves todo en un solo lugar.</p>
+            <a class="btn btn-primary btn-lg mt-2" asp-controller="Account" asp-action="Register">Comenzar prueba gratis</a>
+            <p class="small text-secondary mt-3 mb-0">30 días de prueba · No necesitas tarjeta para empezar</p>
+        </div>
+        <div class="col-lg-5">
+            <div class="preview-card shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-4"><span class="fw-semibold">Agenda de hoy</span><span class="badge text-bg-success-subtle">Miércoles</span></div>
+                <div class="appointment"><span>10:00</span><div><strong>Corte clásico</strong><small>María G.</small></div></div>
+                <div class="appointment"><span>11:30</span><div><strong>Diseño de barba</strong><small>José R.</small></div></div>
+                <div class="appointment muted"><span>13:00</span><div><strong>Tu descanso</strong><small>Un espacio para ti</small></div></div>
+                <div class="appointment"><span>14:00</span><div><strong>Color y secado</strong><small>Andrea L.</small></div></div>
+            </div>
+        </div>
+    </div>
+</section>
+<section class="row g-3 my-5">
+    <div class="col-md-4"><div class="feature-card h-100"><span class="feature-number">01</span><h2 class="h5 mt-3">Comparte tu enlace</h2><p class="text-secondary mb-0">Tus clientes revisan tus servicios y horarios desde su celular.</p></div></div>
+    <div class="col-md-4"><div class="feature-card h-100"><span class="feature-number">02</span><h2 class="h5 mt-3">Evita citas encimadas</h2><p class="text-secondary mb-0">La agenda valida cada horario antes de confirmar una reserva.</p></div></div>
+    <div class="col-md-4"><div class="feature-card h-100"><span class="feature-number">03</span><h2 class="h5 mt-3">Mantén todo a la vista</h2><p class="text-secondary mb-0">Consulta las citas de tu negocio desde una sola pantalla.</p></div></div>
+</section>

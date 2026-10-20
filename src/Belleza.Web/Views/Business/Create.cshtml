@@ -1,0 +1,13 @@
+@model BusinessInput
+@{ ViewData["Title"] = "Configura tu negocio"; }
+<div class="form-shell">
+    <p class="eyebrow">Primer paso</p>
+    <h1 class="h2 fw-bold">¿Cómo se llama tu negocio?</h1>
+    <p class="text-secondary">Después podrás agregar servicios, horarios y personalizar tu página.</p>
+    <form asp-action="Create" method="post" class="mt-4">
+        <div asp-validation-summary="ModelOnly" class="text-danger" role="alert"></div>
+        <div class="mb-4"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control form-control-lg" autofocus autocomplete="organization" /><span asp-validation-for="Name" class="text-danger"></span></div>
+        <button class="btn btn-primary btn-lg w-100" type="submit">Crear mi negocio</button>
+    </form>
+</div>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

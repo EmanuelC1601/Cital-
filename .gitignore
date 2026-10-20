@@ -1,0 +1,29 @@
+# Compilación y herramientas de .NET
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.cache
+artifacts/
+.playwright-cli/
+work/
+
+# Configuración local y secretos
+.env
+.env.*
+!.env.example
+**/appsettings.Local.json
+secrets.json
+
+# Bases locales, logs y datos del contenedor
+*.db
+*.db-shm
+*.db-wal
+*.log
+data/
+
+# Sistemas operativos
+.DS_Store
+Thumbs.db
