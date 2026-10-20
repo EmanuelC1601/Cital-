@@ -37,6 +37,13 @@ public sealed class Business
     public string AccentColor { get; private set; } = "#f3e9ef";
     public int MinimumAdvanceMinutes { get; private set; } = 60;
     public int MaximumBookingDays { get; private set; } = 60;
+    public int ReminderLeadHours { get; private set; } = 24;
+
+    public void UpdateReminderLeadHours(int hours)
+    {
+        if (hours is < 0 or > 168) throw new ArgumentOutOfRangeException(nameof(hours));
+        ReminderLeadHours = hours;
+    }
 
     public void UpdateBookingLimits(int minimumAdvanceMinutes, int maximumBookingDays)
     {

@@ -13,5 +13,6 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 EXPOSE 8080
 COPY --from=build /app/publish .
+RUN mkdir -p /var/lib/citalu-keys && chown -R $APP_UID /var/lib/citalu-keys
 USER $APP_UID
 ENTRYPOINT ["dotnet", "Citalu.Web.dll"]

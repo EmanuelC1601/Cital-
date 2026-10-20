@@ -6,6 +6,9 @@ using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 using System.Threading.RateLimiting;
 using Citalu.Web.Services;
+using Citalu.Infrastructure.Notifications;
+using Citalu.Application.Notifications;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,6 +21,9 @@ builder.Services.AddRateLimiter(options =>
         {
             PermitLimit = 20, Window = TimeSpan.FromMinutes(10), QueueLimit = 0, AutoReplenishment = true
         }));
+    options.AddPolicy("account-recovery", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = 5, Window = TimeSpan.FromHours(1), QueueLimit = 0, AutoReplenishment = true }));
 });
 var uiCulture = CultureInfo.GetCultureInfo("es-MX");
 builder.Services.Configure<RequestLocalizationOptions>(options =>
@@ -59,6 +65,21 @@ builder.Services.AddScoped<IBusinessStore, BusinessStore>();
 builder.Services.AddScoped<CreateBusinessHandler>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AvailabilityCalculator>();
+builder.Services.AddScoped<OutboxQueue>();
+builder.Services.AddScoped<IEmailSender>(services => builder.Environment.IsDevelopment()
+    ? services.GetRequiredService<CapturedEmailSender>()
+    : services.GetRequiredService<SmtpEmailSender>());
+builder.Services.AddScoped<CapturedEmailSender>();
+builder.Services.AddScoped<SmtpEmailSender>();
+builder.Services.AddHostedService<OutboxProcessor>();
+var dataProtectionPath = builder.Configuration["DataProtection:KeysPath"];
+if (builder.Environment.IsDevelopment() || !string.IsNullOrWhiteSpace(dataProtectionPath))
+{
+    // Claves fuera de Git: mantienen válidos los tokens entre reinicios de desarrollo.
+    var keyPath = dataProtectionPath ?? Path.Combine(builder.Environment.ContentRootPath, "data", "keys");
+    Directory.CreateDirectory(keyPath);
+    builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyPath));
+}
 
 var app = builder.Build();
 

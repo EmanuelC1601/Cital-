@@ -17,6 +17,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<BlockedPeriod> BlockedPeriods => Set<BlockedPeriod>();
     public DbSet<Appointment> Appointments => Set<Appointment>();
     public DbSet<AppointmentChange> AppointmentChanges => Set<AppointmentChange>();
+    public DbSet<EmailOutboxMessage> EmailOutbox => Set<EmailOutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -40,6 +41,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(business => business.AccentColor).HasMaxLength(7).HasDefaultValue("#f3e9ef").IsRequired();
             entity.Property(business => business.MinimumAdvanceMinutes).HasDefaultValue(60);
             entity.Property(business => business.MaximumBookingDays).HasDefaultValue(60);
+            entity.Property(business => business.ReminderLeadHours).HasDefaultValue(24);
             entity.HasOne<IdentityUser>().WithMany().HasForeignKey(business => business.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
         });
         builder.Entity<Citalu.Domain.Service>(entity =>
@@ -82,6 +84,18 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(item => item.Note).HasMaxLength(500).IsRequired();
             entity.HasIndex(item => new { item.BusinessId, item.AppointmentId, item.CreatedAtUtc });
             entity.HasOne<Appointment>().WithMany().HasForeignKey(item => item.AppointmentId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<EmailOutboxMessage>(entity =>
+        {
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.Recipient).HasMaxLength(254).IsRequired();
+            entity.Property(item => item.Subject).HasMaxLength(200).IsRequired();
+            entity.Property(item => item.ProtectedBody).HasMaxLength(12000).IsRequired();
+            entity.Property(item => item.DeduplicationKey).HasMaxLength(150).IsRequired();
+            entity.Property(item => item.LastFailure).HasMaxLength(500).IsRequired();
+            entity.HasIndex(item => item.DeduplicationKey).IsUnique();
+            entity.HasIndex(item => new { item.Status, item.AvailableAtUtc, item.LockedUntilUtc });
+            entity.HasIndex(item => new { item.BusinessId, item.AppointmentId, item.Status });
         });
     }
 
