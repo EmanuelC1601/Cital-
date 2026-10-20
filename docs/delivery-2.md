@@ -4,7 +4,7 @@
 
 - Servicios por negocio con creación, edición, activación, desactivación y eliminación. El importe se guarda en MXN con dos decimales; la duración admite de 5 a 480 minutos y el tiempo adicional de 0 a 180 minutos.
 - Horarios semanales con ventanas que no se traslapan, descansos contenidos dentro de una ventana, excepciones de fecha (cerrado o un horario especial) y periodos bloqueados. Los intervalos duran al menos cinco minutos y las fechas se interpretan en la zona horaria guardada por el negocio.
-- Perfil público editable con zona horaria, ubicación y medios de contacto que el propietario decide publicar, colores, logo y portada. Las imágenes cargadas se validan por firma de archivo y se limitan a 3 MB; se almacenan con nombre aleatorio bajo src/Belleza.Web/wwwroot/uploads/{businessId}. Ese directorio está ignorado por Git.
+- Perfil público editable con zona horaria, ubicación y medios de contacto que el propietario decide publicar, colores, logo y portada. Las imágenes cargadas se validan por firma de archivo y se limitan a 3 MB; se almacenan con nombre aleatorio bajo src/Citalu.Web/wwwroot/uploads/{businessId}. Ese directorio está ignorado por Git.
 - Página anónima /b/{slug} con datos públicos explícitos y únicamente servicios activos. El correo de identidad del propietario, su identificador y los motivos privados de bloqueos no forman parte del modelo público.
 - Enlace para copiar y QR PNG descargable desde /b/{slug}/qr.png.
 
@@ -19,9 +19,9 @@ Cada acción autenticada obtiene el negocio a partir del usuario de Identity. La
 El proveedor continúa siendo Microsoft.EntityFrameworkCore.SqlServer 10.0.13 con .NET/EF Core 10. La instancia probada es SQL Server 2019 Express LocalDB. Las migraciones son aditivas respecto de la entrega 1 y no se aplican al iniciar el sitio:
 
 ~~~powershell
-$env:ConnectionStrings__DefaultConnection = 'Server=(localdb)\MSSQLLocalDB;Database=Belleza;Trusted_Connection=True;MultipleActiveResultSets=True;TrustServerCertificate=True'
-dotnet ef database update --project src/Belleza.Infrastructure --startup-project src/Belleza.Web
-dotnet run --project src/Belleza.Web
+$env:ConnectionStrings__DefaultConnection = 'Server=(localdb)\MSSQLLocalDB;Database=Citalu;Trusted_Connection=True;MultipleActiveResultSets=True;TrustServerCertificate=True'
+dotnet ef database update --project src/Citalu.Infrastructure --startup-project src/Citalu.Web
+dotnet run --project src/Citalu.Web
 ~~~
 
 La cadena se configura en una variable de entorno local; no la pongas en appsettings.json, scripts versionados ni commits. La configuración general de LocalDB y Docker está en persistencia.md.

@@ -1,6 +1,8 @@
-# Belleza
+# Citalú
 
 Agenda y reservas para barberías, estéticas y profesionales de belleza. Las entregas 1–3 incluyen cuenta del propietario, negocio, servicios, horarios, página pública y reservas con protección de solapamientos en SQL Server.
+
+El nombre comercial es **Citalú**; los nombres técnicos usan **Citalu**. Las ramas nuevas usan `Ema/`. Consulta [AGENTS.md](AGENTS.md) para las convenciones del repositorio.
 
 ## Requisitos
 
@@ -18,11 +20,11 @@ Agenda y reservas para barberías, estéticas y profesionales de belleza. Las en
 
    ```powershell
    $env:MSSQL_SA_PASSWORD = (Get-Content .env | Where-Object { $_ -match '^MSSQL_SA_PASSWORD=' } | Select-Object -First 1) -replace '^MSSQL_SA_PASSWORD=', ''
-   $env:ConnectionStrings__DefaultConnection = "Server=localhost,1433;Database=Belleza;User Id=sa;Password=$env:MSSQL_SA_PASSWORD;Encrypt=True;TrustServerCertificate=True"
+   $env:ConnectionStrings__DefaultConnection = "Server=localhost,1433;Database=Citalu;User Id=sa;Password=$env:MSSQL_SA_PASSWORD;Encrypt=True;TrustServerCertificate=True"
    ```
 
-4. Aplica la migración explícitamente: `dotnet tool restore` y `dotnet ef database update --project src/Belleza.Infrastructure --startup-project src/Belleza.Web`.
-5. Ejecuta `dotnet run --project src/Belleza.Web` y abre la URL HTTPS indicada por ASP.NET Core.
+4. Aplica la migración explícitamente: `dotnet tool restore` y `dotnet ef database update --project src/Citalu.Infrastructure --startup-project src/Citalu.Web`.
+5. Ejecuta `dotnet run --project src/Citalu.Web` y abre la URL HTTPS indicada por ASP.NET Core.
 
 La migración no se ejecuta al iniciar la aplicación. Para producción, aplícala como paso explícito del despliegue después de respaldar y verificar el entorno. Las instrucciones para LocalDB y SQL Server Docker están en [persistencia](docs/persistence.md).
 
@@ -30,11 +32,11 @@ La entrega 2 agrega catálogo, horarios y la página pública `/b/{slug}`. La [e
 
 ## Estructura
 
-- `src/Belleza.Domain`: entidades y reglas centrales, sin dependencias de infraestructura.
-- `src/Belleza.Application`: casos de uso y contratos.
-- `src/Belleza.Infrastructure`: EF Core, Identity y SQL Server.
-- `src/Belleza.Web`: MVC, vistas, cookies de autenticación y composición de servicios.
-- `tests/Belleza.Application.Tests`: pruebas unitarias de reglas de aplicación y estados de cita.
+- `src/Citalu.Domain`: entidades y reglas centrales, sin dependencias de infraestructura.
+- `src/Citalu.Application`: casos de uso y contratos.
+- `src/Citalu.Infrastructure`: EF Core, Identity y SQL Server.
+- `src/Citalu.Web`: MVC, vistas, cookies de autenticación y composición de servicios.
+- `tests/Citalu.Application.Tests`: pruebas unitarias de reglas de aplicación y estados de cita.
 
 ## Arquitectura y aislamiento
 
@@ -60,7 +62,7 @@ La cadena de conexión y la contraseña local se leen desde variables de entorno
 
 ## Datos y operación
 
-- Migraciones versionadas en `src/Belleza.Infrastructure/Persistence/Migrations`.
+- Migraciones versionadas en `src/Citalu.Infrastructure/Persistence/Migrations`.
 - SQL Server se conserva en el volumen Docker `sqlserver-data`.
 - Haz respaldos periódicos y ensaya la restauración en una base distinta antes de despliegues relevantes.
 - Retención y eliminación de datos se documentarán cuando exista el flujo de citas y exportación.

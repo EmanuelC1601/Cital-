@@ -14,12 +14,12 @@ sqllocaldb start MSSQLLocalDB
 sqlcmd -S '(localdb)\MSSQLLocalDB' -E -Q "SELECT @@VERSION; SELECT name FROM sys.databases ORDER BY name;"
 ```
 
-La base `Belleza` se crea solo cuando aplicas la primera migración si aún no existe. Configura la conexión en la sesión actual de PowerShell:
+La base `Citalu` se crea solo cuando aplicas la primera migración si aún no existe. Configura la conexión en la sesión actual de PowerShell:
 
 ```powershell
-$env:ConnectionStrings__DefaultConnection = 'Server=(localdb)\MSSQLLocalDB;Database=Belleza;Trusted_Connection=True;MultipleActiveResultSets=True;TrustServerCertificate=True'
-dotnet ef database update --project src/Belleza.Infrastructure --startup-project src/Belleza.Web
-dotnet run --project src/Belleza.Web
+$env:ConnectionStrings__DefaultConnection = 'Server=(localdb)\MSSQLLocalDB;Database=Citalu;Trusted_Connection=True;MultipleActiveResultSets=True;TrustServerCertificate=True'
+dotnet ef database update --project src/Citalu.Infrastructure --startup-project src/Citalu.Web
+dotnet run --project src/Citalu.Web
 ```
 
 La variable de entorno no se guarda en Git. Para terminar la sesión, ciérrala o ejecuta `Remove-Item Env:ConnectionStrings__DefaultConnection`.
@@ -32,9 +32,9 @@ La variable de entorno no se guarda en Git. Para terminar la sesión, ciérrala 
 
    ```powershell
    $env:MSSQL_SA_PASSWORD = (Get-Content .env | Where-Object { $_ -match '^MSSQL_SA_PASSWORD=' } | Select-Object -First 1) -replace '^MSSQL_SA_PASSWORD=', ''
-   $env:ConnectionStrings__DefaultConnection = "Server=localhost,1433;Database=Belleza;User Id=sa;Password=$env:MSSQL_SA_PASSWORD;Encrypt=True;TrustServerCertificate=True"
-   dotnet ef database update --project src/Belleza.Infrastructure --startup-project src/Belleza.Web
-   dotnet run --project src/Belleza.Web
+   $env:ConnectionStrings__DefaultConnection = "Server=localhost,1433;Database=Citalu;User Id=sa;Password=$env:MSSQL_SA_PASSWORD;Encrypt=True;TrustServerCertificate=True"
+   dotnet ef database update --project src/Citalu.Infrastructure --startup-project src/Citalu.Web
+   dotnet run --project src/Citalu.Web
    ```
 
 `.env` está ignorado por Git. No escribas la contraseña en `appsettings*.json`, scripts versionados, commits ni logs.

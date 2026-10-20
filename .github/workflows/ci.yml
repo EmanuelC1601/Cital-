@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "codex/**"]
+    branches: [main, "Ema/**", "codex/**"]
   pull_request:
     branches: [main]
 
@@ -15,8 +15,8 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Restore
-        run: dotnet restore Belleza.sln
+        run: dotnet restore Citalu.sln
       - name: Build
-        run: dotnet build Belleza.sln --configuration Release --no-restore
+        run: dotnet build Citalu.sln --configuration Release --no-restore
       - name: Test
-        run: dotnet test Belleza.sln --configuration Release --no-build
+        run: dotnet test Citalu.sln --configuration Release --no-build

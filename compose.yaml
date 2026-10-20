@@ -18,11 +18,11 @@ services:
   web:
     build:
       context: .
-      dockerfile: src/Belleza.Web/Dockerfile
+      dockerfile: src/Citalu.Web/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=Belleza;User Id=sa;Password=${MSSQL_SA_PASSWORD:?Crea .env desde .env.example};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=Citalu;User Id=sa;Password=${MSSQL_SA_PASSWORD:?Crea .env desde .env.example};Encrypt=True;TrustServerCertificate=True"
     ports:
       - "8080:8080"
     depends_on:

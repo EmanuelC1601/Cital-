@@ -1,0 +1,15 @@
+@model Citalu.Web.Models.PublicBusinessPage
+@{ ViewData["Title"] = Model.Name; }
+<div class="public-page" style="--brand:@Model.PrimaryColor;--accent:@Model.AccentColor">
+    <section class="public-hero @(string.IsNullOrEmpty(Model.CoverPath) ? "" : "has-cover")" style="@(string.IsNullOrEmpty(Model.CoverPath) ? "" : $"background-image:linear-gradient(0deg,rgba(20,15,18,.72),rgba(20,15,18,.08)),url('{Model.CoverPath}')")">
+        @if (!string.IsNullOrEmpty(Model.LogoPath)) { <img class="public-logo" src="@Model.LogoPath" alt="Logo de @Model.Name" /> }
+        <div><p class="eyebrow">Conoce el negocio</p><h1>@Model.Name</h1>@if (!string.IsNullOrWhiteSpace(Model.Description)) { <p class="lead mb-0">@Model.Description</p> }</div>
+    </section>
+    <div class="public-content">
+        @if (Model.Services.Count > 0) { <section class="mb-5"><div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"><h2 class="h3 fw-bold mb-0">Servicios</h2><a class="btn btn-primary" href="/b/@Model.Slug/reservar">Reservar una cita</a></div><div class="row g-3">@foreach(var service in Model.Services) { <div class="col-md-6"><article class="public-service h-100"><div class="d-flex justify-content-between gap-3"><h3 class="h5">@service.Name</h3><strong class="text-nowrap">$@service.Price.ToString("N2") MXN</strong></div>@if(!string.IsNullOrWhiteSpace(service.Description)){<p class="text-secondary mb-2">@service.Description</p>}<small class="text-secondary">Duración aproximada: @service.DurationMinutes minutos</small></article></div> }</div></section> }
+        else { <div class="alert alert-light border">Este negocio aún no publica servicios.</div> }
+        <section class="public-contact"><div><h2 class="h5">Contacto y ubicación</h2>@if(!string.IsNullOrWhiteSpace(Model.Location)){<p class="mb-1">@Model.Location</p>}@if(!string.IsNullOrWhiteSpace(Model.PublicPhone)){<p class="mb-1"><a href="tel:@Model.PublicPhone">@Model.PublicPhone</a></p>}@if(!string.IsNullOrWhiteSpace(Model.PublicEmail)){<p class="mb-0"><a href="mailto:@Model.PublicEmail">@Model.PublicEmail</a></p>}</div>
+        <div class="share-card"><label class="form-label" for="publicLink">Comparte esta página</label><div class="input-group"><input class="form-control" id="publicLink" readonly value="@($"{Context.Request.Scheme}://{Context.Request.Host}/b/{Model.Slug}")" /><button class="btn btn-outline-primary" type="button" id="copyLink">Copiar</button></div><span id="copyStatus" class="small" role="status"></span><a class="btn btn-sm btn-outline-secondary mt-2" href="/b/@Model.Slug/qr.png">Descargar código QR</a></div></section>
+    </div>
+</div>
+@section Scripts { <script>document.getElementById('copyLink')?.addEventListener('click', async () => { const field = document.getElementById('publicLink'); const status = document.getElementById('copyStatus'); try { if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(field.value); else { field.select(); document.execCommand('copy'); } status.textContent = 'Enlace copiado'; } catch { field.focus(); field.select(); status.textContent = 'Selecciona y copia el enlace'; } });</script> }

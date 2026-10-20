@@ -24,4 +24,4 @@ Los endpoints que escriben agenda usan una transacción SQL Server y toman `UPDL
 
 ## Migraciones
 
-Genera migraciones con `dotnet ef migrations add Nombre --project src/Belleza.Infrastructure --startup-project src/Belleza.Web`. Aplica cambios explícitamente con `dotnet ef database update`; no se llama a `Database.Migrate()` al arrancar. El detalle de la entrega 2 y su verificación SQL Server están en [delivery-2](delivery-2.md).
+Genera migraciones con `dotnet ef migrations add Nombre --project src/Citalu.Infrastructure --startup-project src/Citalu.Web`. Aplica cambios explícitamente con `dotnet ef database update`; no se llama a `Database.Migrate()` al arrancar. El detalle de la entrega 2 y su verificación SQL Server están en [delivery-2](delivery-2.md).

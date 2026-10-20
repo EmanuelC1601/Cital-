@@ -32,9 +32,9 @@ Los cambios de horario que quitarían disponibilidad se rechazan si alcanzan cit
 Las migraciones `20261020161620_Delivery3AppointmentsAndBookingLimits` y `20261020164023_Delivery3ManagementTokenProtection` agregan límites, tablas de citas e historial, índices de agenda/tokens/idempotencia y el token cifrado para recuperar una respuesta idempotente. Son aditivas: no borran tablas ni filas anteriores. No se aplican automáticamente al iniciar.
 
 ```powershell
-$env:ConnectionStrings__DefaultConnection = 'Server=(localdb)\MSSQLLocalDB;Database=Belleza;Trusted_Connection=True;MultipleActiveResultSets=True;TrustServerCertificate=True'
-dotnet ef database update --project src/Belleza.Infrastructure --startup-project src/Belleza.Web
-dotnet run --project src/Belleza.Web
+$env:ConnectionStrings__DefaultConnection = 'Server=(localdb)\MSSQLLocalDB;Database=Citalu;Trusted_Connection=True;MultipleActiveResultSets=True;TrustServerCertificate=True'
+dotnet ef database update --project src/Citalu.Infrastructure --startup-project src/Citalu.Web
+dotnet run --project src/Citalu.Web
 ```
 
 Mantén la cadena en una variable de entorno y no la incluyas en `appsettings*.json`, Git ni logs. Consulta [persistencia](persistence.md) para SQL Server LocalDB y Docker.
@@ -54,7 +54,7 @@ El 20 de octubre de 2026 se aplicaron las dos migraciones de Entrega 3 sobre `Be
 - Un segundo propietario vio la agenda vacía y un POST de cambio de estado sobre la cita ajena respondió 404, sin modificarla.
 - El límite público respondió 429 desde la solicitud 21 de 25 en una ventana de 10 minutos.
 - La respuesta pública no contenía el correo del propietario, nombre ni teléfono del cliente, ni el motivo privado de un bloqueo. Se inspeccionó la página pública en 1440×1000 y 390×844.
-- `dotnet build Belleza.sln` y `dotnet test Belleza.sln` finalizaron correctamente; las pruebas unitarias son complementarias a las verificaciones SQL Server anteriores.
+- `dotnet build Citalu.sln` y `dotnet test Citalu.sln` finalizaron correctamente; las pruebas unitarias son complementarias a las verificaciones SQL Server anteriores.
 
 La base de validación comenzó sin usuarios ni negocios. Se crearon registros sintéticos en LocalDB y se retiraron al terminar usando sus identificadores/correo exactos; no se modificaron datos de otros usuarios. La base quedó sin usuarios, negocios ni citas de prueba; se conservaron las cinco migraciones y el esquema.
 
