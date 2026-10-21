@@ -6,6 +6,8 @@
 *.user
 *.suo
 *.cache
+**/Properties/PublishProfiles/*.pubxml
+**/Properties/PublishProfiles/*.pubxml.user
 artifacts/
 .playwright-cli/
 output/playwright/

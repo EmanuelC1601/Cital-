@@ -27,6 +27,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>65f16728-7949-4f23-8439-848df9feb409</UserSecretsId>
+    <EnvironmentName>Demo</EnvironmentName>
   </PropertyGroup>
 
 </Project>
