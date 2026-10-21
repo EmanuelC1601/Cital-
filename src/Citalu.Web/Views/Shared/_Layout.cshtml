@@ -3,6 +3,7 @@
     var activeController = ViewContext.RouteData.Values["controller"]?.ToString();
     var activeAction = ViewContext.RouteData.Values["action"]?.ToString();
     var pageTitle = ViewData["Title"]?.ToString() ?? "Citalú";
+    var isPublicBusinessPage = Context.Request.Path.StartsWithSegments("/b");
     var quickAgendaPath = Url.Action("Agenda", "Booking") ?? "/citas/agenda";
     if (Context.Request.Query.TryGetValue("date", out var selectedAgendaDate))
     {
@@ -17,19 +18,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f6f3f0" />
     <title>@pageTitle - Citalú</title>
+    <link rel="icon" type="image/svg+xml" href="~/assets/brand/favicon.svg" />
     <script type="importmap"></script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body class="@(isSignedIn ? "app-body" : "public-body")">
-    @if (isSignedIn)
+<body class="@(isSignedIn && !isPublicBusinessPage ? "app-body" : "public-body")">
+    @if (isSignedIn && !isPublicBusinessPage)
     {
         <div class="app-frame">
             <aside class="owner-sidebar" aria-label="Navegación del propietario">
-                <a class="brand-lockup" asp-controller="Business" asp-action="Index" aria-label="Citalú, inicio del panel">
-                    <span class="brand-mark" aria-hidden="true">C</span>
-                    <span class="brand-name">Citalú<span class="brand-caption">PANEL DEL NEGOCIO</span></span>
-                </a>
+                <div class="owner-brand-group">
+                    <a class="brand-lockup" asp-controller="Business" asp-action="Index" aria-label="Citalú, inicio del panel">
+                        <partial name="_BrandLogo" model="@(new Citalu.Web.Models.BrandLogoViewModel("citalu-horizontal.svg", "brand-asset brand-asset-horizontal"))" />
+                    </a>
+                    <span class="brand-caption">Panel del negocio</span>
+                </div>
                 <p class="sidebar-context">Organiza tu trabajo<br /><strong>y atiende con calma.</strong></p>
                 <nav class="owner-nav">
                     <a class="owner-nav-link @Active("Booking", "Agenda")" asp-controller="Booking" asp-action="Agenda">
@@ -71,7 +75,7 @@
 
             <div class="app-main-column">
                 <header class="mobile-appbar">
-                    <a class="brand-lockup" asp-controller="Business" asp-action="Index" aria-label="Citalú, inicio del panel"><span class="brand-mark" aria-hidden="true">C</span><span class="brand-name">Citalú</span></a>
+                    <a class="brand-lockup mobile-brand-lockup" asp-controller="Business" asp-action="Index" aria-label="Citalú, inicio del panel"><partial name="_BrandLogo" model="@(new Citalu.Web.Models.BrandLogoViewModel("citalu-simbolo.svg", "brand-asset brand-asset-symbol"))" /></a>
                     <button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobileOwnerNav" id="mobileOwnerNavToggle">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menú</span>
                     </button>
@@ -98,11 +102,18 @@
             </nav>
         </div>
     }
+    else if (isPublicBusinessPage)
+    {
+        <main class="business-public-main" role="main">
+            @RenderBody()
+        </main>
+        <footer class="business-public-footer">Con Citalú</footer>
+    }
     else
     {
         <header class="public-header">
             <div class="public-header-inner">
-                <a class="brand-lockup" asp-controller="Home" asp-action="Index" aria-label="Citalú, inicio"><span class="brand-mark" aria-hidden="true">C</span><span class="brand-name">Citalú</span></a>
+                <a class="brand-lockup" asp-controller="Home" asp-action="Index" aria-label="Citalú, inicio"><partial name="_BrandLogo" model="@(new Citalu.Web.Models.BrandLogoViewModel("citalu-horizontal.svg", "brand-asset brand-asset-horizontal"))" /></a>
                 <nav aria-label="Cuenta"><a class="public-login-link" asp-controller="Account" asp-action="Login">Iniciar sesión</a><a class="btn btn-primary" asp-controller="Account" asp-action="Register">Crear cuenta</a></nav>
             </div>
         </header>

@@ -1,0 +1,13 @@
+@model Citalu.Web.Models.BrandLogoViewModel
+@{
+    var isSymbol = Model.AssetFile.Contains("simbolo", StringComparison.OrdinalIgnoreCase);
+    var width = isSymbol ? 371 : 1305;
+    var altText = Model.Decorative ? string.Empty : "Citalú";
+}
+<img class="@Model.CssClass"
+     src="@Url.Content($"~/assets/brand/{Model.AssetFile}")"
+     width="@width"
+     height="385"
+     alt="@altText"
+     aria-hidden="@(Model.Decorative ? "true" : null)"
+     decoding="async" />

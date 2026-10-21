@@ -84,11 +84,13 @@ button, a, input, select, textarea, summary { -webkit-tap-highlight-color: trans
 .app-body { overflow-x: hidden; }
 .app-frame { display: flex; min-height: 100vh; }
 .owner-sidebar { position: sticky; top: 0; display: flex; flex: 0 0 248px; flex-direction: column; width: 248px; height: 100vh; padding: 1.5rem 1rem 1rem; background: #fff; border-right: 1px solid var(--line); }
-.brand-lockup { display: inline-flex; align-items: center; gap: .75rem; width: fit-content; color: var(--ink); text-decoration: none; }
+.brand-lockup { display: inline-flex; align-items: center; gap: .75rem; width: fit-content; padding: .25rem; color: var(--ink); text-decoration: none; }
 .brand-lockup:hover { color: var(--ink); }
-.brand-mark { display: grid; width: 2.45rem; height: 2.45rem; place-items: center; border-radius: .8rem; color: #fff; background: var(--plum); font-family: Georgia, serif; font-size: 1.55rem; font-weight: 700; line-height: 1; }
-.brand-name { display: grid; color: var(--ink); font-family: Georgia, "Times New Roman", serif; font-size: 1.48rem; font-weight: 700; line-height: 1.05; }
-.brand-caption { margin-top: .32rem; color: var(--ink-muted); font-family: inherit; font-size: .58rem; font-weight: 750; letter-spacing: .12em; }
+.brand-asset { display: block; flex: none; height: auto; object-fit: contain; }
+.brand-asset-horizontal { width: 11.8rem; }
+.brand-asset-symbol { width: 2.3rem; }
+.owner-brand-group { display: grid; justify-items: start; gap: .2rem; }
+.brand-caption { margin-left: .35rem; color: var(--ink-muted); font-size: .68rem; font-weight: 650; letter-spacing: .075em; text-transform: uppercase; }
 .sidebar-context { margin: 2.25rem .65rem 1rem; color: var(--ink-muted); font-size: .9rem; line-height: 1.55; }
 .sidebar-context strong { color: var(--ink); font-weight: 650; }
 .owner-nav { display: grid; gap: .3rem; }
@@ -192,6 +194,8 @@ button, a, input, select, textarea, summary { -webkit-tap-highlight-color: trans
 .public-header { background: var(--surface); border-bottom: 1px solid var(--line); }
 .public-header-inner { width: min(100% - 2rem, 1100px); min-height: 4.5rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin: 0 auto; }
 .public-header nav { display: flex; align-items: center; gap: 1rem; }
+.business-public-main { min-height: 100vh; }
+.business-public-footer { padding: 1rem; color: var(--ink-muted); font-size: .78rem; text-align: center; }
 .public-login-link { color: var(--ink); font-weight: 600; text-decoration: none; }
 .public-main { width: min(100%, 1440px); flex: 1; margin: 0 auto; padding: 1.2rem clamp(1rem, 3vw, 2.5rem) 3rem; }
 .public-footer { padding: 1.2rem 1rem; color: var(--ink-muted); font-size: .82rem; text-align: center; }
@@ -219,8 +223,7 @@ button, a, input, select, textarea, summary { -webkit-tap-highlight-color: trans
   .app-frame { display: block; min-height: 100vh; }
   .owner-sidebar { display: none; }
   .mobile-appbar { position: relative; z-index: 3; display: flex; justify-content: space-between; align-items: center; gap: .75rem; min-height: 3.9rem; padding: .55rem 1rem; border-bottom: 1px solid var(--line); background: #fff; }
-  .mobile-appbar .brand-mark { width: 2.1rem; height: 2.1rem; border-radius: .65rem; font-size: 1.3rem; }
-  .mobile-appbar .brand-name { font-size: 1.25rem; }
+  .mobile-appbar .brand-asset-symbol { width: 2.3rem; }
   .mobile-menu-toggle { display: inline-flex; min-height: 2.75rem; align-items: center; gap: .42rem; padding: .45rem .65rem; border: 1px solid #d3cbd0; border-radius: var(--radius-sm); color: var(--ink); background: #fff; font-size: .85rem; font-weight: 650; }
   .mobile-menu-toggle svg { width: 1.15rem; height: 1.15rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
   .mobile-owner-nav:not([hidden]) { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem; padding: .65rem 1rem .8rem; border-bottom: 1px solid var(--line); background: #fff; }
@@ -270,8 +273,7 @@ button, a, input, select, textarea, summary { -webkit-tap-highlight-color: trans
   .new-appointment-summary small { font-size: .77rem; }
   .public-main { padding: .8rem .75rem 2rem; }
   .public-header-inner { min-height: 4rem; }
-  .public-header-inner .brand-mark { width: 2.1rem; height: 2.1rem; font-size: 1.3rem; }
-  .public-header-inner .brand-name { font-size: 1.25rem; }
+  .public-header-inner .brand-asset-horizontal { width: 9.8rem; }
   .public-header nav { gap: .55rem; }
   .public-header nav .btn { min-height: 2.55rem; padding: .45rem .65rem; font-size: .8rem; }
   .public-login-link { font-size: .8rem; }
