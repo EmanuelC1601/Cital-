@@ -26,6 +26,8 @@ Primero confirma el host/subdominio asignado y las rutas absolutas que permite e
 | `Email__CaptureOnly` | `true` |
 | `Email__CapturePath` | Ruta absoluta privada fuera de la raíz publicada |
 
+`src/Citalu.Web/appsettings.Demo.json` ya establece `Application:PublicBaseUrl=https://citalu.runasp.net` y `AllowedHosts=citalu.runasp.net`. Se carga solo si el panel inicia el sitio con `ASPNETCORE_ENVIRONMENT=Demo`; una variable de entorno del panel puede sobrescribirlo.
+
 La configuración no acepta LocalDB, requiere HTTPS canónico, host permitido, directorios absolutos y certificado PFX de Data Protection en cualquier entorno distinto de Development. `Demo` conserva cookies seguras. Si el proxy termina TLS, solo activa `ForwardedHeaders__Enabled` y agrega `ForwardedHeaders__KnownProxies__0` cuando el panel documente la IP exacta del proxy; no confíes en `X-Forwarded-Host`.
 
 Genera el PFX localmente con una contraseña propia y transfiérelo por el mecanismo privado del panel. No escribas la contraseña en el chat, archivos versionados o historial de comandos. Conserva el PFX y su contraseña en una bóveda separada: el key ring está cifrado con ese certificado. No cambies el identificador Data Protection ni elimines claves existentes.
