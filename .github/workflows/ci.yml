@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "codex/**"]
+    branches: [main, "Ema/**", "codex/**"]
   pull_request:
     branches: [main]
 
@@ -11,12 +11,47 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Start SQL Server for integration tests
+        shell: bash
+        run: |
+          password="Citalu!$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          echo "CITALU_SQLSERVER_TEST_CONNECTION=Server=localhost,1433;Database=CitaluDelivery4Integration;User ID=sa;Password=$password;TrustServerCertificate=True;MultipleActiveResultSets=True" >> "$GITHUB_ENV"
+          docker run --detach --name citalu-sqlserver --publish 1433:1433 \
+            --env ACCEPT_EULA=Y --env MSSQL_PID=Developer --env MSSQL_SA_PASSWORD="$password" \
+            mcr.microsoft.com/mssql/server:2022-latest
+          for attempt in {1..60}; do
+            if docker exec citalu-sqlserver /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$password" -Q "SELECT 1" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs citalu-sqlserver
+          exit 1
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
       - name: Restore
-        run: dotnet restore Belleza.sln
+        run: dotnet restore Citalu.sln
       - name: Build
-        run: dotnet build Belleza.sln --configuration Release --no-restore
+        run: dotnet build Citalu.sln --configuration Release --no-restore
+      - name: Restore local .NET tools
+        run: dotnet tool restore
+      - name: Check EF migration model
+        run: dotnet ef migrations has-pending-model-changes --project src/Citalu.Infrastructure --startup-project src/Citalu.Web
       - name: Test
-        run: dotnet test Belleza.sln --configuration Release --no-build
+        run: dotnet test Citalu.sln --configuration Release --no-build
+      - name: Publish release package
+        run: |
+          dotnet publish src/Citalu.Web/Citalu.Web.csproj --configuration Release --no-restore --output artifacts/release/app
+          dotnet ef migrations script --idempotent --project src/Citalu.Infrastructure --startup-project src/Citalu.Web --output artifacts/release/migrations.sql
+          git rev-parse HEAD > artifacts/release/commit.txt
+      - name: Upload reviewable release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Citalu-${{ github.sha }}
+          path: artifacts/release/
+          if-no-files-found: error
+      - name: Stop SQL Server
+        if: always()
+        run: docker rm --force citalu-sqlserver || true

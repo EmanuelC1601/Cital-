@@ -14,12 +14,12 @@ sqllocaldb start MSSQLLocalDB
 sqlcmd -S '(localdb)\MSSQLLocalDB' -E -Q "SELECT @@VERSION; SELECT name FROM sys.databases ORDER BY name;"
 ```
 
-La base `Belleza` se crea solo cuando aplicas la primera migración si aún no existe. Configura la conexión en la sesión actual de PowerShell:
+La base `Citalu` se crea solo cuando aplicas la primera migración si aún no existe. Configura la conexión en la sesión actual de PowerShell:
 
 ```powershell
-$env:ConnectionStrings__DefaultConnection = 'Server=(localdb)\MSSQLLocalDB;Database=Belleza;Trusted_Connection=True;MultipleActiveResultSets=True;TrustServerCertificate=True'
-dotnet ef database update --project src/Belleza.Infrastructure --startup-project src/Belleza.Web
-dotnet run --project src/Belleza.Web
+$env:ConnectionStrings__DefaultConnection = 'Server=(localdb)\MSSQLLocalDB;Database=Citalu;Trusted_Connection=True;MultipleActiveResultSets=True;TrustServerCertificate=True'
+dotnet ef database update --project src/Citalu.Infrastructure --startup-project src/Citalu.Web
+dotnet run --project src/Citalu.Web
 ```
 
 La variable de entorno no se guarda en Git. Para terminar la sesión, ciérrala o ejecuta `Remove-Item Env:ConnectionStrings__DefaultConnection`.
@@ -32,9 +32,9 @@ La variable de entorno no se guarda en Git. Para terminar la sesión, ciérrala 
 
    ```powershell
    $env:MSSQL_SA_PASSWORD = (Get-Content .env | Where-Object { $_ -match '^MSSQL_SA_PASSWORD=' } | Select-Object -First 1) -replace '^MSSQL_SA_PASSWORD=', ''
-   $env:ConnectionStrings__DefaultConnection = "Server=localhost,1433;Database=Belleza;User Id=sa;Password=$env:MSSQL_SA_PASSWORD;Encrypt=True;TrustServerCertificate=True"
-   dotnet ef database update --project src/Belleza.Infrastructure --startup-project src/Belleza.Web
-   dotnet run --project src/Belleza.Web
+   $env:ConnectionStrings__DefaultConnection = "Server=localhost,1433;Database=Citalu;User Id=sa;Password=$env:MSSQL_SA_PASSWORD;Encrypt=True;TrustServerCertificate=True"
+   dotnet ef database update --project src/Citalu.Infrastructure --startup-project src/Citalu.Web
+   dotnet run --project src/Citalu.Web
    ```
 
 `.env` está ignorado por Git. No escribas la contraseña en `appsettings*.json`, scripts versionados, commits ni logs.
@@ -43,7 +43,7 @@ La variable de entorno no se guarda en Git. Para terminar la sesión, ciérrala 
 
 La migración `InitialIdentityAndBusiness` crea las tablas de ASP.NET Identity, `Businesses` y `__EFMigrationsHistory`. `Businesses` incluye el propietario, slug, zona horaria e inicio y fin de la prueba. Los índices únicos de slug y de propietario se aplican en SQL Server.
 
-En esta entrega todavía no existe una tabla `Subscriptions`: la prueba se representa con fechas en `Businesses`. La entidad de suscripción, su estado de acceso, los pagos y la auditoría se incorporarán en la entrega correspondiente.
+La prueba se representa históricamente en `Businesses.TrialStartedAtUtc` y `TrialEndsAtUtc`. La entrega 5 agrega `BusinessSubscriptions`, `SubscriptionPeriods`, `SubscriptionPayments` y `SubscriptionAudits`; su migración copia las fechas exactas desde `Businesses` sin reiniciar pruebas. Véase [delivery-5](delivery-5.md).
 
 No se aplica ninguna migración al arrancar la aplicación. Revisa y aplica cada migración explícitamente en desarrollo y como un paso controlado de despliegue.
 

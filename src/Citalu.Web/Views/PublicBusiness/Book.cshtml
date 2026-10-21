@@ -1,0 +1,22 @@
+@model Citalu.Web.Models.PublicBookingPage
+@{ ViewData["Title"] = $"Reservar · {Model.BusinessName}"; }
+<div class="booking-wrap my-4" id="booking" data-slug="@Model.Slug" data-key="@Model.IdempotencyKey">
+    <p class="eyebrow mb-1">@Model.BusinessName</p><h1 class="display-6 fw-bold">Reserva tu cita</h1>
+    <p class="text-secondary">Elige servicio, fecha y hora. La confirmación es inmediata; todos los horarios están en @Model.TimeZoneId.</p>
+    <div id="bookingAlert" class="alert d-none" role="alert"></div>
+    @if (!Model.CanBook) { <div class="alert alert-warning" role="status">Las reservas están temporalmente deshabilitadas. Contacta directamente con el negocio.</div> }
+    @if (Model.CanBook) { <section class="feature-card">
+        <form id="bookingForm" class="row g-3">
+            @Html.AntiForgeryToken()
+            <div class="col-12"><label for="service" class="form-label">Servicio</label><select class="form-select form-select-lg" id="service" required><option value="">Selecciona un servicio</option>@foreach(var item in Model.Services){<option value="@item.Id">@item.Name · $@item.Price.ToString("N2") MXN · @item.DurationMinutes min</option>}</select></div>
+            <div class="col-12 col-md-6"><label for="date" class="form-label">Fecha</label><input class="form-control form-control-lg" id="date" type="date" required /></div>
+            <div class="col-12 col-md-6"><label for="time" class="form-label">Horario disponible</label><select class="form-select form-select-lg" id="time" required disabled><option value="">Primero elige servicio y fecha</option></select></div>
+            <div class="col-12 col-md-6"><label for="customerName" class="form-label">Tu nombre</label><input class="form-control" id="customerName" maxlength="120" autocomplete="name" required /></div>
+            <div class="col-12 col-md-6"><label for="customerPhone" class="form-label">Teléfono de contacto</label><input class="form-control" id="customerPhone" maxlength="40" autocomplete="tel" type="tel" required /></div>
+            <div class="col-12"><label for="customerEmail" class="form-label">Correo (opcional)</label><input class="form-control" id="customerEmail" maxlength="254" autocomplete="email" type="email" /></div>
+            <div class="col-12"><button id="submitBooking" class="btn btn-primary btn-lg w-100" type="submit">Confirmar cita</button></div>
+        </form>
+    </section> }
+    <section id="confirmation" class="feature-card mt-3 d-none" aria-live="polite"></section>
+</div>
+@section Scripts { <script src="~/js/booking.js" asp-append-version="true"></script> }

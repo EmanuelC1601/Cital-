@@ -1,0 +1,10 @@
+@model Citalu.Application.Businesses.BusinessSummary
+@{ ViewData["Title"] = "Mi negocio"; }
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 my-4">
+    <div><p class="eyebrow mb-2">Tu espacio de trabajo</p><h1 class="display-6 fw-bold mb-0">@Model.Name</h1></div>
+    <span class="badge rounded-pill text-bg-success-subtle px-3 py-2">Prueba gratuita</span>
+</div>
+<div class="row g-3">
+    <div class="col-lg-8"><div class="feature-card h-100"><h2 class="h5">Configura tu negocio</h2><p class="text-secondary">Administra servicios, horarios, citas y la información pública que quieres compartir.</p><div class="d-flex flex-wrap gap-2 mb-3"><a class="btn btn-primary" asp-controller="Booking" asp-action="Agenda">Abrir agenda</a><a class="btn btn-outline-primary" asp-controller="Delivery2" asp-action="Services">Administrar servicios</a><a class="btn btn-outline-primary" asp-controller="Delivery2" asp-action="Schedule">Horarios y bloqueos</a><a class="btn btn-outline-primary" asp-controller="Delivery2" asp-action="Profile">Editar perfil público</a><a class="btn btn-outline-primary" asp-controller="Subscription" asp-action="Index">Prueba y pagos</a></div><div class="alert alert-light border mb-0">Tu prueba de 30 días termina <strong>@Model.TrialEndsAtUtc.ToLocalTime().ToString("d 'de' MMMM 'de' yyyy")</strong>. Consulta estado y opciones en <a asp-controller="Subscription" asp-action="Index">Suscripción</a>.</div></div></div>
+    <div class="col-lg-4"><div class="feature-card h-100"><p class="eyebrow">Tu página pública</p><p class="h5 mb-2">/b/@Model.Slug</p><a class="btn btn-sm btn-outline-primary mb-3" href="/b/@Model.Slug" target="_blank" rel="noopener">Abrir página</a><p class="small text-secondary">Tus clientes pueden consultar servicios y reservar sin crear una cuenta.</p><a class="btn btn-sm btn-outline-secondary" href="/b/@Model.Slug/qr.png">Descargar QR</a></div></div>
+</div>

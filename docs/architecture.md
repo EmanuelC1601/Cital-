@@ -8,16 +8,22 @@ Web ───────► Application ───────► Domain
  └────► Infrastructure ──────────┘
 ```
 
-Web contiene MVC, Identity y el arranque de dependencias. Application contiene contratos y casos de uso. Infrastructure implementa el almacenamiento SQL Server e Identity. Domain modela el negocio, su propietario, el slug, la zona horaria y la prueba.
+Web contiene MVC, Identity y el arranque de dependencias. Application contiene contratos y casos de uso. Infrastructure implementa el almacenamiento SQL Server e Identity. Domain modela el negocio, el catálogo de servicios, los horarios locales, los bloqueos, las citas y el historial.
 
-## Modelo inicial
+## Modelo de negocio
 
-`AspNetUsers` identifica la cuenta y `Businesses` el negocio. El negocio conserva `OwnerUserId`, `Slug`, `TimeZoneId`, `TrialStartedAtUtc` y `TrialEndsAtUtc`. SQL Server impone unicidad tanto del propietario como del slug. La prueba comienza al crear el negocio y dura 30 días.
+`AspNetUsers` identifica la cuenta y `Businesses` el negocio. El negocio conserva propietario, slug, zona horaria, prueba de 30 días y límites de reserva. Servicios, horarios, descansos, excepciones, bloqueos, citas e historial guardan `BusinessId`. Las reglas se expresan en hora local; las citas guardan inicios UTC y una instantánea del servicio acordado.
 
 ## Aislamiento de datos
 
-Las vistas del panel no aceptan un tenant enviado por navegador. El controlador obtiene el identificador de propietario a partir del principal autenticado; el contrato de persistencia lo exige como filtro de lectura. En módulos futuros cada fila tenant-aware guardará `BusinessId`, las relaciones incluirán ese identificador y las escrituras validarán pertenencia. Esta primera entrega todavía no contiene datos de clientes ni citas.
+Las vistas del panel no aceptan un tenant enviado por navegador. Cada acción obtiene el negocio desde el principal autenticado y filtra las lecturas y escrituras por su `BusinessId`. La página anónima consulta por slug y devuelve campos expresamente públicos; no expone datos de citas, correo de Identity ni motivos de bloqueo. Los tokens de gestión se guardan como hash y se limitan a una cita.
+
+La entrega 5 agrega suscripción, periodos de cobertura, pagos manuales inmutables y auditoría. Las reglas de acceso a reservas se evalúan en el servidor con reloj controlable; no dependen del worker de avisos. Solo el rol de plataforma puede conceder cobertura.
+
+## Concurrencia de citas
+
+Los endpoints que escriben agenda usan una transacción SQL Server y toman `UPDLOCK, HOLDLOCK` sobre la fila del negocio antes de comprobar disponibilidad. Esa fila es el mutex de escritura por tenant: serializa reserva pública, alta manual, reprogramación, cancelación y cambios de estado. La disponibilidad se valida otra vez dentro del bloqueo. Las escrituras de calendario que pueden quitar espacios adquieren el mismo bloqueo y rechazan conflictos con citas existentes. El detalle de reglas y pruebas está en [delivery-3](delivery-3.md).
 
 ## Migraciones
 
-Genera una migración con `dotnet ef migrations add Nombre --project src/Belleza.Infrastructure --startup-project src/Belleza.Web`. Aplica cambios explícitamente con `dotnet ef database update ...`; no se llama a `Database.Migrate()` al arrancar.
+Genera migraciones con `dotnet ef migrations add Nombre --project src/Citalu.Infrastructure --startup-project src/Citalu.Web`. Aplica cambios explícitamente con `dotnet ef database update`; no se llama a `Database.Migrate()` al arrancar. El detalle de la entrega 2 y su verificación SQL Server están en [delivery-2](delivery-2.md).

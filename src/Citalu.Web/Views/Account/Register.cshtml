@@ -1,0 +1,16 @@
+@model RegisterInput
+@{ ViewData["Title"] = "Crear cuenta"; }
+<div class="form-shell">
+    <p class="eyebrow">Empieza en unos minutos</p>
+    <h1 class="h2 fw-bold">Crea tu cuenta</h1>
+    <p class="text-secondary">Usa tu correo para configurar la agenda de tu negocio.</p>
+    <form asp-action="Register" method="post" class="mt-4">
+        <div asp-validation-summary="ModelOnly" class="text-danger" role="alert"></div>
+        <div class="mb-3"><label asp-for="Email" class="form-label"></label><input asp-for="Email" class="form-control form-control-lg" autocomplete="email" autofocus /><span asp-validation-for="Email" class="text-danger"></span></div>
+        <div class="mb-3"><label asp-for="Password" class="form-label"></label><input asp-for="Password" class="form-control form-control-lg" autocomplete="new-password" /><span asp-validation-for="Password" class="text-danger"></span><div class="form-text">Incluye mayúscula, minúscula, número y símbolo.</div></div>
+        <div class="mb-4"><label asp-for="ConfirmPassword" class="form-label"></label><input asp-for="ConfirmPassword" class="form-control form-control-lg" autocomplete="new-password" /><span asp-validation-for="ConfirmPassword" class="text-danger"></span></div>
+        <button class="btn btn-primary btn-lg w-100" type="submit">Crear cuenta y enviar confirmación</button>
+    </form>
+    <p class="text-secondary mt-4 mb-0">¿Ya tienes cuenta? <a asp-action="Login">Inicia sesión</a>.</p>
+</div>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }
