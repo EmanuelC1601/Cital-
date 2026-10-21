@@ -30,7 +30,7 @@ La configuración no acepta LocalDB, requiere HTTPS canónico, host permitido, d
 
 Genera el PFX localmente con una contraseña propia y transfiérelo por el mecanismo privado del panel. No escribas la contraseña en el chat, archivos versionados o historial de comandos. Conserva el PFX y su contraseña en una bóveda separada: el key ring está cifrado con ese certificado. No cambies el identificador Data Protection ni elimines claves existentes.
 
-Publica el ZIP Release en el sitio protegido usando el método que indique el panel. El paquete no incluye base, imágenes, capturas, PFX o key ring. No se ha verificado qué administrador de archivos/editor ofrece la cuenta Free ni las rutas admitidas; confirma esto primero con un directorio de prueba sin datos. No coloques archivos de capturas bajo `wwwroot`.
+Publica el ZIP Release en el sitio protegido usando el método que indique el panel. El proyecto excluye `data/` y `wwwroot/uploads/` al publicar, por lo que el artefacto probado no incluía base, imágenes, capturas, PFX o key ring. No se ha verificado qué administrador de archivos/editor ofrece la cuenta Free ni las rutas admitidas; confirma esto primero con un directorio de prueba sin datos. No coloques archivos de capturas bajo `wwwroot`.
 
 ### Aplicar el esquema
 
