@@ -36,6 +36,30 @@ Esta etapa cubre la estructura autenticada y la agenda del propietario:
 - Alta manual inline, accesible por teclado, con etiquetas, campos compactos, ayuda de validación del horario y botón guardar. Tras un conflicto de horario, la redirección conserva temporalmente los valores de entrada con TempData protegido por ASP.NET Core. La validación final sigue siendo del servidor y el mismo control transaccional existente.
 - No se usa modal, dependencia de iconos, fuentes remotas, datos de producción ni tokens de gestión para las capturas.
 
+## Marca gráfica aprobada
+
+El logotipo proporcionado como referencia se trazó a partir de su PNG transparente en contornos SVG vectoriales editables; el archivo raster no se incrusta ni se publica. Las formas conservan la C con marca de confirmación y la palabra **Citalú** con acento. Los recursos están en `src/Citalu.Web/wwwroot/assets/brand/`:
+
+- `citalu-horizontal.svg`: versión para fondos claros, en ciruela `#64384E` y carbón `#242023`.
+- `citalu-horizontal-dark.svg`: versión para fondos oscuros; aclara la ciruela a `#BE92AA` y usa marfil `#F8F5F3` para el nombre, conservando contraste sobre carbón.
+- `citalu-simbolo.svg`: símbolo independiente para el encabezado compacto móvil.
+- `favicon.svg`: símbolo en una base marfil discreta para mantener lectura en pestañas claras y oscuras.
+
+Las proporciones intrínsecas y las medidas HTML están declaradas; el espacio de seguridad queda en el componente CSS y no dentro del trazado. El parcial Razor `_BrandLogo` usa imágenes decorativas junto a enlaces con nombre accesible, evitando que lector de pantalla anuncie dos veces la marca. La firma de las páginas de negocio es “Con Citalú”; no desplaza el logotipo o imágenes que haya subido el negocio. Contrastes de los trazos: ciruela sobre blanco 9.47:1, ciruela sobre marfil 8.57:1, ciruela clara sobre carbón 6.04:1 y marfil sobre carbón 14.81:1. No hay fuente, icono ni solicitud externa en tiempo de ejecución. El lema no forma parte del archivo del logo.
+
+La versión clara se usa en acceso, registro, recuperación y navegación de escritorio; en navegación móvil se usa únicamente el símbolo. El favicon es SVG y escala a 16 y 32 px sin una fuente instalada. La página pública del negocio mantiene su nombre, logo y portada propios, sin la barra de marca de Citalú.
+
+Capturas reales de esta integración, tomadas con Playwright en el navegador local y datos sintéticos de LocalDB:
+
+- `output/playwright/logo-login-desktop.png`: acceso a 1440 × 1000 con logo horizontal.
+- `output/playwright/logo-agenda-desktop.png`: agenda privada a 1440 × 1000 con navegación de escritorio.
+- `output/playwright/logo-navigation-mobile.png` y `logo-navigation-mobile-menu.png`: símbolo compacto y menú de navegación a 390 × 844.
+- `output/playwright/favicon-16-32-review.png`: favicon visto a los dos tamaños sobre fondo carbón y blanco.
+
+Se comprobó también por navegador que `/b/{slug}` no muestra el encabezado del panel ni el logotipo de plataforma, incluso cuando el propietario tiene sesión abierta; muestra el contenido del negocio y la firma “Con Citalú”. Las capturas y la página auxiliar para revisar tamaños están en `output/playwright/`, ignorado por Git. El recorrido se hizo solo en LocalDB con un negocio de revisión ficticio.
+
+Build y pruebas después de la integración: `dotnet build Citalu.sln -c Release` correcto con 0 advertencias/errores; `dotnet test Citalu.sln -c Release --no-build` correcto con 11 unitarias y 23 de integración. No hay cambios de persistencia ni migraciones.
+
 Las reglas de disponibilidad, reservas, autorizaciones, suscripciones, persistencia y migraciones no forman parte de este cambio visual.
 
 ## Capturas y revisión de la primera etapa
