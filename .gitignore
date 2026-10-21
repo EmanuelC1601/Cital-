@@ -8,6 +8,7 @@
 *.cache
 artifacts/
 .playwright-cli/
+output/playwright/
 work/
 
 # Configuración local y secretos
