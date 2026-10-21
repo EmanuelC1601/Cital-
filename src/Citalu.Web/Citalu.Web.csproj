@@ -9,6 +9,7 @@
   <ItemGroup>
     <Content Remove="data\**\*;wwwroot\uploads\**\*" />
     <None Remove="data\**\*;wwwroot\uploads\**\*" />
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
   <ItemGroup>
