@@ -83,7 +83,7 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
     }
 
     [Authorize, HttpGet("agenda")]
-    public async Task<IActionResult> Agenda(DateOnly? date, CancellationToken token)
+    public async Task<IActionResult> Agenda(DateOnly? date, CancellationToken token, Guid? serviceId = null)
     {
         var business = await OwnedBusiness(token);
         if (business is null) return RedirectToAction("Index", "Business");
@@ -105,8 +105,20 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
             group.Any(x => x.Status == OutboxStatus.Pending) ? "Recordatorio programado" : "Notificación sustituida");
         var failedIds = mailStates.Where(x => x.Status == OutboxStatus.Failed).GroupBy(x => x.AppointmentId!.Value)
             .ToDictionary(group => group.Key, group => group.OrderByDescending(x => x.CreatedAtUtc).First().Id);
-        return View(new OwnerAgendaPage(business.Name, business.TimeZoneId, selectedDate, appointments,
-            await db.Services.Where(x => x.BusinessId == business.Id).OrderBy(x => x.Name).ToListAsync(token), new OwnerAppointmentInput { Date = selectedDate }, statusNames, failedIds));
+        var rememberedServiceId = TempData["ManualServiceId"] as string;
+        var rememberedTime = TempData["ManualTime"] as string;
+        var manualInput = new OwnerAppointmentInput
+        {
+            Date = selectedDate,
+            ServiceId = serviceId ?? (Guid.TryParse(rememberedServiceId, out var rememberedId) ? rememberedId : Guid.Empty),
+            Time = TimeOnly.TryParseExact(rememberedTime, "HH:mm", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var time) ? time : default,
+            CustomerName = TempData["ManualCustomerName"] as string ?? "",
+            CustomerPhone = TempData["ManualCustomerPhone"] as string ?? "",
+            CustomerEmail = TempData["ManualCustomerEmail"] as string
+        };
+        return View(new OwnerAgendaPage(business.Name, business.Slug, business.TimeZoneId, selectedDate, appointments,
+            await db.Services.Where(x => x.BusinessId == business.Id).OrderBy(x => x.Name).ToListAsync(token), manualInput, statusNames, failedIds));
     }
 
     [Authorize, HttpGet("agenda/exportar")]
@@ -134,7 +146,7 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
     {
         var business = await OwnedBusiness(token);
         if (business is null) return NotFound();
-        if (!ModelState.IsValid) { TempData["Error"] = "Revisa los datos de la cita."; return RedirectToAction(nameof(Agenda), new { date = input.Date }); }
+        if (!ModelState.IsValid) { TempData["Error"] = "Revisa los datos de la cita."; PreserveManualInput(input); return RedirectToAction(nameof(Agenda), new { date = input.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), serviceId = input.ServiceId }); }
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
         business = await LockBusinessAsync(business.Id, token);
         if (subscriptionAccess is not null && !(await subscriptionAccess.GetAsync(business!.Id, token)).CanBook)
@@ -142,7 +154,7 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
         var service = await db.Services.SingleOrDefaultAsync(x => x.BusinessId == business!.Id && x.Id == input.ServiceId && x.IsActive, token);
         if (service is null) return BadRequest("Selecciona un servicio activo.");
         var slots = await availability.GetSlotsAsync(business!, service, input.Date, null, token);
-        if (!slots.Contains(input.Time)) { await tx.RollbackAsync(token); TempData["Error"] = "Ese horario ya no está disponible."; return RedirectToAction(nameof(Agenda), new { date = input.Date }); }
+        if (!slots.Contains(input.Time)) { await tx.RollbackAsync(token); TempData["Error"] = "Ese horario ya no está disponible."; PreserveManualInput(input); return RedirectToAction(nameof(Agenda), new { date = input.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), serviceId = input.ServiceId }); }
         var start = LocalToUtc(input.Date, input.Time, business!);
         var manageToken = CreateToken();
         var appointment = new Appointment(business!.Id, service.Id, input.CustomerName, input.CustomerPhone,
@@ -392,4 +404,14 @@ public sealed class BookingController(ApplicationDbContext db, AvailabilityCalcu
 
     private Task SupersedePendingEmails(Guid appointmentId, CancellationToken token) =>
         outbox.SupersedeAppointmentMessagesAsync(appointmentId, token);
+
+    // TempData is protected by ASP.NET Core; it carries form values across the PRG redirect only after an error.
+    private void PreserveManualInput(OwnerAppointmentInput input)
+    {
+        TempData["ManualServiceId"] = input.ServiceId.ToString("D");
+        TempData["ManualTime"] = input.Time.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        TempData["ManualCustomerName"] = input.CustomerName;
+        TempData["ManualCustomerPhone"] = input.CustomerPhone;
+        TempData["ManualCustomerEmail"] = input.CustomerEmail ?? "";
+    }
 }

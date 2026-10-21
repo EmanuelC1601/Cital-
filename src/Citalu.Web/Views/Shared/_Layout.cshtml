@@ -1,57 +1,117 @@
-﻿<!DOCTYPE html>
+@{
+    var isSignedIn = User.Identity?.IsAuthenticated == true;
+    var activeController = ViewContext.RouteData.Values["controller"]?.ToString();
+    var activeAction = ViewContext.RouteData.Values["action"]?.ToString();
+    var pageTitle = ViewData["Title"]?.ToString() ?? "Citalú";
+    var quickAgendaPath = Url.Action("Agenda", "Booking") ?? "/citas/agenda";
+    if (Context.Request.Query.TryGetValue("date", out var selectedAgendaDate))
+    {
+        quickAgendaPath += "?date=" + Uri.EscapeDataString(selectedAgendaDate.ToString());
+    }
+    string Active(string controller, string action) => string.Equals(activeController, controller, StringComparison.OrdinalIgnoreCase) && string.Equals(activeAction, action, StringComparison.OrdinalIgnoreCase) ? "is-active" : "";
+}
+<!DOCTYPE html>
 <html lang="es-MX">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Citalú</title>
+    <meta name="theme-color" content="#f6f3f0" />
+    <title>@pageTitle - Citalú</title>
     <script type="importmap"></script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand fw-bold" asp-area="" asp-controller="Home" asp-action="Index">Citalú</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav ms-auto align-items-sm-center">
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Business" asp-action="Index">Mi negocio</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="Delivery2" asp-action="Services">Servicios</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="Delivery2" asp-action="Schedule">Horarios</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="Delivery2" asp-action="Profile">Página pública</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="Booking" asp-action="Agenda">Agenda</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="Subscription" asp-action="Index">Suscripción</a></li>
-                            @if (User.IsInRole("PlatformAdmin")) { <li class="nav-item"><a class="nav-link" asp-controller="PlatformSubscriptionAdmin" asp-action="Index">Plataforma</a></li> }
-                            <li class="nav-item"><form asp-controller="Account" asp-action="Logout" method="post"><button class="btn btn-link nav-link" type="submit">Cerrar sesión</button></form></li>
-                        }
-                        else
-                        {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Account" asp-action="Login">Iniciar sesión</a></li>
-                            <li class="nav-item ms-sm-2"><a class="btn btn-primary" asp-controller="Account" asp-action="Register">Crear cuenta</a></li>
-                        }
-                    </ul>
+<body class="@(isSignedIn ? "app-body" : "public-body")">
+    @if (isSignedIn)
+    {
+        <div class="app-frame">
+            <aside class="owner-sidebar" aria-label="Navegación del propietario">
+                <a class="brand-lockup" asp-controller="Business" asp-action="Index" aria-label="Citalú, inicio del panel">
+                    <span class="brand-mark" aria-hidden="true">C</span>
+                    <span class="brand-name">Citalú<span class="brand-caption">PANEL DEL NEGOCIO</span></span>
+                </a>
+                <p class="sidebar-context">Organiza tu trabajo<br /><strong>y atiende con calma.</strong></p>
+                <nav class="owner-nav">
+                    <a class="owner-nav-link @Active("Booking", "Agenda")" asp-controller="Booking" asp-action="Agenda">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="16" rx="2"/><path d="M7.5 3v4M16.5 3v4M3.5 10h17M8 14h3m-3 3h6"/></svg><span>Agenda</span>
+                    </a>
+                    <a class="owner-nav-link @Active("Business", "Index")" asp-controller="Business" asp-action="Index">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V8l8-4 8 4v12M3 20h18M9 20v-6h6v6M8 9h.01M16 9h.01"/></svg><span>Mi negocio</span>
+                    </a>
+                    <a class="owner-nav-link @Active("Delivery2", "Services")" asp-controller="Delivery2" asp-action="Services">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="2"/></svg><span>Servicios</span>
+                    </a>
+                    <a class="owner-nav-link @Active("Delivery2", "Schedule")" asp-controller="Delivery2" asp-action="Schedule">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg><span>Horarios y bloqueos</span>
+                    </a>
+                    <a class="owner-nav-link @Active("Delivery2", "Profile")" asp-controller="Delivery2" asp-action="Profile">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M3 9h18M7 14h4m2 0h4"/></svg><span>Página pública</span>
+                    </a>
+                    <a class="owner-nav-link @Active("Subscription", "Index")" asp-controller="Subscription" asp-action="Index">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M7 15h4"/></svg><span>Suscripción</span>
+                    </a>
+                    @if (User.IsInRole("PlatformAdmin"))
+                    {
+                        <div class="nav-section-label">Administración de plataforma</div>
+                        <a class="owner-nav-link @Active("PlatformSubscriptionAdmin", "Index")" asp-controller="PlatformSubscriptionAdmin" asp-action="Index">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.5 3.2 7.5 7.5 9.5 4.3-2 7.5-5 7.5-9.5V6L12 3Z"/><path d="m9 12 2 2 4-4"/></svg><span>Administración</span>
+                        </a>
+                    }
+                </nav>
+                <div class="sidebar-account">
+                    <span class="account-avatar" aria-hidden="true">@(string.IsNullOrWhiteSpace(User.Identity?.Name) ? "C" : User.Identity!.Name![0].ToString().ToUpperInvariant())</span>
+                    <span class="account-email" title="@User.Identity?.Name">@User.Identity?.Name</span>
+                    <form asp-controller="Account" asp-action="Logout" method="post">
+                        <button class="icon-button" type="submit" aria-label="Cerrar sesión" title="Cerrar sesión">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5m5 5H3m9-9h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>
+                        </button>
+                    </form>
                 </div>
+            </aside>
+
+            <div class="app-main-column">
+                <header class="mobile-appbar">
+                    <a class="brand-lockup" asp-controller="Business" asp-action="Index" aria-label="Citalú, inicio del panel"><span class="brand-mark" aria-hidden="true">C</span><span class="brand-name">Citalú</span></a>
+                    <button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobileOwnerNav" id="mobileOwnerNavToggle">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menú</span>
+                    </button>
+                </header>
+                <nav class="mobile-owner-nav" id="mobileOwnerNav" aria-label="Secciones del negocio" hidden>
+                    <a class="owner-nav-link @Active("Booking", "Agenda")" asp-controller="Booking" asp-action="Agenda">Agenda</a>
+                    <a class="owner-nav-link @Active("Business", "Index")" asp-controller="Business" asp-action="Index">Mi negocio</a>
+                    <a class="owner-nav-link @Active("Delivery2", "Services")" asp-controller="Delivery2" asp-action="Services">Servicios</a>
+                    <a class="owner-nav-link @Active("Delivery2", "Schedule")" asp-controller="Delivery2" asp-action="Schedule">Horarios y bloqueos</a>
+                    <a class="owner-nav-link @Active("Delivery2", "Profile")" asp-controller="Delivery2" asp-action="Profile">Página pública</a>
+                    <a class="owner-nav-link @Active("Subscription", "Index")" asp-controller="Subscription" asp-action="Index">Suscripción</a>
+                    @if (User.IsInRole("PlatformAdmin")) { <a class="owner-nav-link @Active("PlatformSubscriptionAdmin", "Index")" asp-controller="PlatformSubscriptionAdmin" asp-action="Index">Administración de plataforma</a> }
+                    <form asp-controller="Account" asp-action="Logout" method="post"><button class="owner-nav-link mobile-logout" type="submit">Cerrar sesión</button></form>
+                </nav>
+                <main class="app-content" role="main">
+                    @if (TempData["AccountMessage"] is string accountMessage) { <div class="alert alert-info" role="status">@accountMessage @if (TempData["NeedsConfirmation"] is true) { <a asp-controller="Account" asp-action="ResendConfirmation">Reenviar confirmación</a> }</div> }
+                    @RenderBody()
+                </main>
+                <footer class="app-footer">&copy; 2026 Citalú · <a asp-controller="Home" asp-action="Privacy">Privacidad (provisional)</a> · <a asp-controller="Home" asp-action="Terms">Términos (provisionales)</a></footer>
             </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @if (TempData["AccountMessage"] is string accountMessage) { <div class="alert alert-info mt-3" role="status">@accountMessage @if (TempData["NeedsConfirmation"] is true) { <a asp-controller="Account" asp-action="ResendConfirmation">Reenviar confirmación</a> }</div> }
+            <nav class="mobile-action-bar" aria-label="Acciones rápidas">
+                <a class="mobile-action-link @Active("Booking", "Agenda")" asp-controller="Booking" asp-action="Agenda"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="16" rx="2"/><path d="M7.5 3v4M16.5 3v4M3.5 10h17"/></svg><span>Agenda</span></a>
+                <a class="mobile-new-appointment" href="@(quickAgendaPath)#new-appointment" data-open-appointment><span aria-hidden="true">+</span><span>Nueva cita</span></a>
+            </nav>
+        </div>
+    }
+    else
+    {
+        <header class="public-header">
+            <div class="public-header-inner">
+                <a class="brand-lockup" asp-controller="Home" asp-action="Index" aria-label="Citalú, inicio"><span class="brand-mark" aria-hidden="true">C</span><span class="brand-name">Citalú</span></a>
+                <nav aria-label="Cuenta"><a class="public-login-link" asp-controller="Account" asp-action="Login">Iniciar sesión</a><a class="btn btn-primary" asp-controller="Account" asp-action="Register">Crear cuenta</a></nav>
+            </div>
+        </header>
+        <main class="public-main" role="main">
+            @if (TempData["AccountMessage"] is string publicAccountMessage) { <div class="alert alert-info" role="status">@publicAccountMessage</div> }
             @RenderBody()
         </main>
-    </div>
-
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 Citalú · <a asp-controller="Home" asp-action="Privacy">Privacidad (provisional)</a> · <a asp-controller="Home" asp-action="Terms">Términos (provisionales)</a>
-        </div>
-    </footer>
+        <footer class="public-footer">&copy; 2026 Citalú · <a asp-controller="Home" asp-action="Privacy">Privacidad (provisional)</a> · <a asp-controller="Home" asp-action="Terms">Términos (provisionales)</a></footer>
+    }
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>

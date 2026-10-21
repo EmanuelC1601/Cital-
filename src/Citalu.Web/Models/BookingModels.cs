@@ -28,7 +28,7 @@ public sealed record PublicBookingPage(string BusinessName, string Slug, string 
     string Location, string Phone, string Email, IReadOnlyList<Service> Services, Guid IdempotencyKey, bool CanBook = true);
 public sealed record BookingConfirmation(string BusinessName, string ServiceName, decimal Price, int Duration,
     DateOnly Date, TimeOnly Time, string TimeZoneId, string ManageUrl, Guid Id);
-public sealed record OwnerAgendaPage(string BusinessName, string TimeZoneId, DateOnly Date,
+public sealed record OwnerAgendaPage(string BusinessName, string Slug, string TimeZoneId, DateOnly Date,
     IReadOnlyList<Appointment> Appointments, IReadOnlyList<Service> Services, OwnerAppointmentInput Input,
     IReadOnlyDictionary<Guid, string> NotificationStates, IReadOnlyDictionary<Guid, Guid> FailedNotificationIds);
 public sealed record ManageView(string BusinessName, string ServiceName, decimal Price, int Duration,
