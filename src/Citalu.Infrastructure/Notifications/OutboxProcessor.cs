@@ -159,10 +159,12 @@ public sealed class OutboxProcessor(IServiceScopeFactory scopes, TimeProvider cl
             return effectiveEnd.UtcTicks == expectedTicks;
         }
         var appointment = await db.Appointments.AsNoTracking().Where(x => x.Id == appointmentId && x.BusinessId == item.BusinessId)
-            .Select(x => new { x.Status, x.UpdatedAtUtc, x.CreatedAtUtc }).SingleOrDefaultAsync(token);
+            .Select(x => new { x.Status, x.UpdatedAtUtc, x.CreatedAtUtc, x.StartUtc }).SingleOrDefaultAsync(token);
         var cancellationNotice = key.Contains(":cancelación:", StringComparison.Ordinal);
+        var reminder = key.Contains(":reminder:", StringComparison.Ordinal);
         return appointment is not null &&
                (appointment.Status == AppointmentStatus.Confirmed || cancellationNotice && appointment.Status == AppointmentStatus.Cancelled) &&
+               (!reminder || appointment.StartUtc > clock.GetUtcNow()) &&
                (!version.HasValue || (appointment.UpdatedAtUtc ?? appointment.CreatedAtUtc) == version);
     }
 

@@ -339,6 +339,29 @@ public sealed class SqlServerOutboxTests
     }
 
     [Fact]
+    public async Task OverdueReminderForPastAppointmentIsSupersededWithoutSending()
+    {
+        await using var fixture = await SqlFixture.CreateAsync();
+        var (business, appointment) = await fixture.CreateAppointmentAsync();
+        await using (var db = fixture.NewDb())
+        {
+            await db.Appointments.Where(x => x.Id == appointment.Id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.StartUtc, DateTimeOffset.UtcNow.AddMinutes(-10)));
+        }
+
+        var reminderKey = $"appointment:{appointment.Id}:reminder:{appointment.StartUtc:O}";
+        await fixture.EnqueueAsync(business.Id, appointment.Id, reminderKey, appointment.CreatedAtUtc);
+        var (_, processor, sender) = fixture.CreateProcessor(new ControllableEmailSender());
+
+        Assert.True(await processor.ProcessOneAsync(default, fixture.DeduplicationPrefix));
+
+        var row = await fixture.ReadOutboxAsync(reminderKey);
+        Assert.Equal(OutboxStatus.Superseded, row.Status);
+        Assert.Equal("", row.ProtectedBody);
+        Assert.Equal(0, sender.SendCount);
+    }
+
+    [Fact]
     public async Task WorkItemsRemainSeparatedByBusinessInOwnerQueries()
     {
         await using var fixture = await SqlFixture.CreateAsync();

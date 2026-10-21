@@ -11,7 +11,9 @@ public sealed class CapturedEmailSender(IWebHostEnvironment environment, IConfig
 {
     public async Task SendAsync(EmailMessage message, CancellationToken cancellationToken)
     {
-        if (!environment.IsDevelopment()) throw new InvalidOperationException("El capturador de correo solo está permitido en desarrollo.");
+        var demoCaptureOnly = environment.IsEnvironment("Demo") && configuration.GetValue<bool>("Email:CaptureOnly");
+        if (!environment.IsDevelopment() && !demoCaptureOnly)
+            throw new InvalidOperationException("El capturador solo está permitido en desarrollo o con captura explícita en el entorno Demo.");
         var configured = configuration["Email:CapturePath"];
         var path = string.IsNullOrWhiteSpace(configured)
             ? Path.Combine(environment.ContentRootPath, "data", "mail-capture")

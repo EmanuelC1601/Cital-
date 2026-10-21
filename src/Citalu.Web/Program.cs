@@ -80,7 +80,8 @@ builder.Services.AddScoped<AvailabilityCalculator>();
 builder.Services.AddScoped<SubscriptionAccessService>();
 builder.Services.AddScoped<ManualPaymentRegistrationService>();
 builder.Services.AddScoped<OutboxQueue>();
-builder.Services.AddScoped<IEmailSender>(services => builder.Environment.IsDevelopment()
+var demoCaptureOnly = builder.Environment.IsEnvironment("Demo") && builder.Configuration.GetValue<bool>("Email:CaptureOnly");
+builder.Services.AddScoped<IEmailSender>(services => builder.Environment.IsDevelopment() || demoCaptureOnly
     ? services.GetRequiredService<CapturedEmailSender>()
     : services.GetRequiredService<SmtpEmailSender>());
 builder.Services.AddScoped<CapturedEmailSender>();
@@ -96,7 +97,7 @@ if (builder.Environment.IsDevelopment() || !string.IsNullOrWhiteSpace(dataProtec
         : dataProtectionPath;
     Directory.CreateDirectory(keyPath);
     var protection = builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyPath));
-    if (builder.Environment.IsProduction())
+    if (!builder.Environment.IsDevelopment())
     {
         var certificatePath = builder.Configuration["DataProtection:CertificatePath"]!;
         var certificatePassword = builder.Configuration["DataProtection:CertificatePassword"]!;
@@ -219,7 +220,7 @@ static async Task BootstrapFirstPlatformAdminAsync(IServiceProvider services)
 
 static void ValidateOperationalConfiguration(IConfiguration configuration, IHostEnvironment environment)
 {
-    if (!environment.IsProduction()) return;
+    if (environment.IsDevelopment()) return;
     var missing = new List<string>();
     var connection = configuration.GetConnectionString("DefaultConnection");
     if (string.IsNullOrWhiteSpace(connection)) missing.Add("ConnectionStrings:DefaultConnection");
@@ -239,12 +240,30 @@ static void ValidateOperationalConfiguration(IConfiguration configuration, IHost
     if (!Path.IsPathFullyQualified(configuration["DataProtection:CertificatePath"] ?? string.Empty)) missing.Add("DataProtection:CertificatePath (PFX with private key outside Git)");
     if (string.IsNullOrWhiteSpace(configuration["DataProtection:CertificatePassword"])) missing.Add("DataProtection:CertificatePassword (secret configuration)");
     if (!Path.IsPathFullyQualified(configuration["Storage:UploadsPath"] ?? string.Empty)) missing.Add("Storage:UploadsPath (absolute persistent file storage path)");
-    if (string.IsNullOrWhiteSpace(configuration["Email:Smtp:Host"])) missing.Add("Email:Smtp:Host");
-    if (!int.TryParse(configuration["Email:Smtp:Port"], out var port) || port is < 1 or > 65535) missing.Add("Email:Smtp:Port");
-    if (string.IsNullOrWhiteSpace(configuration["Email:Smtp:From"])) missing.Add("Email:Smtp:From");
-    if (!string.IsNullOrWhiteSpace(configuration["Email:Smtp:Username"]) && string.IsNullOrWhiteSpace(configuration["Email:Smtp:Password"]))
-        missing.Add("Email:Smtp:Password (required when username is set)");
-    if (!configuration.GetValue<bool>("Email:Smtp:EnableSsl")) missing.Add("Email:Smtp:EnableSsl=true");
+    var demoCaptureOnly = environment.IsEnvironment("Demo") && configuration.GetValue<bool>("Email:CaptureOnly");
+    if (demoCaptureOnly)
+    {
+        var capturePath = configuration["Email:CapturePath"];
+        if (!Path.IsPathFullyQualified(capturePath ?? string.Empty))
+            missing.Add("Email:CapturePath (absolute private path outside the published web root)");
+        else
+        {
+            var webRoot = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "wwwroot"));
+            var fullCapturePath = Path.GetFullPath(capturePath!);
+            var relativePath = Path.GetRelativePath(webRoot, fullCapturePath);
+            if (relativePath == "." || relativePath == ".." || relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || Path.IsPathRooted(relativePath))
+                missing.Add("Email:CapturePath (must be outside the published web root)");
+        }
+    }
+    else
+    {
+        if (string.IsNullOrWhiteSpace(configuration["Email:Smtp:Host"])) missing.Add("Email:Smtp:Host");
+        if (!int.TryParse(configuration["Email:Smtp:Port"], out var port) || port is < 1 or > 65535) missing.Add("Email:Smtp:Port");
+        if (string.IsNullOrWhiteSpace(configuration["Email:Smtp:From"])) missing.Add("Email:Smtp:From");
+        if (!string.IsNullOrWhiteSpace(configuration["Email:Smtp:Username"]) && string.IsNullOrWhiteSpace(configuration["Email:Smtp:Password"]))
+            missing.Add("Email:Smtp:Password (required when username is set)");
+        if (!configuration.GetValue<bool>("Email:Smtp:EnableSsl")) missing.Add("Email:Smtp:EnableSsl=true");
+    }
 
     if (configuration.GetValue<bool>("ForwardedHeaders:Enabled"))
     {
@@ -254,7 +273,7 @@ static void ValidateOperationalConfiguration(IConfiguration configuration, IHost
     }
 
     if (missing.Count > 0)
-        throw new InvalidOperationException("Production configuration is incomplete or unsafe. Configure: " + string.Join(", ", missing));
+        throw new InvalidOperationException("Non-development configuration is incomplete or unsafe. Configure: " + string.Join(", ", missing));
 }
 
 // Expuesto para que las pruebas de integración puedan iniciar el host más adelante.
