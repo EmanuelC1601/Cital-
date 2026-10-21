@@ -5,6 +5,12 @@
     <ProjectReference Include="..\Citalu.Infrastructure\Citalu.Infrastructure.csproj" />
   </ItemGroup>
 
+  <!-- Never package local keys, captured mail, or synthetic uploads from an ignored developer data directory. -->
+  <ItemGroup>
+    <Content Remove="data\**\*;wwwroot\uploads\**\*" />
+    <None Remove="data\**\*;wwwroot\uploads\**\*" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13">
       <PrivateAssets>all</PrivateAssets>
