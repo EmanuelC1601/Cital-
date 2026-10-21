@@ -1,10 +1,10 @@
 # Demostración privada en MonsterASP.NET Free
 
-Esta guía prepara una demostración aislada con datos ficticios. No convierte Free en un servicio operativo, no invita clientes y no autoriza por sí misma a publicar. **No se ha creado un sitio ni una base remota**; los permisos, persistencia y herramientas del plan deben comprobarse en el panel antes de considerarlos verificados.
+Esta guía prepara una demostración aislada con datos ficticios. No convierte Free en un servicio operativo, no invita clientes y no autoriza por sí misma a publicar. **El 21-oct-2026 se conectó a la base `db74897`, que tenía cero tablas de usuario, y se aplicó el esquema actual (9 migraciones, 21 tablas incluido el historial). No hay negocios ni clientes cargados. La aplicación todavía no se publicó.** Hay que confirmar en el panel que esta base está dedicada exclusivamente a la demo antes de cargar datos; los permisos, persistencia y herramientas del plan aún deben probarse.
 
 ## Aislamiento y privacidad
 
-1. En el panel crea un sitio nuevo para la demo y una base SQL Server nueva, vacía y dedicada. No reutilices la base de desarrollo ni una base con clientes. Usa nombres, teléfonos y domicilios ficticios; para correos usa dominios reservados como `example.invalid`.
+1. En el panel crea un sitio nuevo para la demo. La base `db74897` ya tiene el esquema vacío de Citalú; confirma que es exclusiva de esta demo. Si no es exclusiva, detente y crea una base dedicada antes de cargar datos. No reutilices bases con clientes. Usa nombres, teléfonos y domicilios ficticios; para correos usa dominios reservados como `example.invalid`.
 2. Activa en el panel la restricción por contraseña o IP antes de abrir el sitio. Comprueba desde una sesión/red autorizada que funciona y desde otra no autorizada que responde con denegación. No uses una URL difícil de adivinar ni `robots.txt` como control de acceso. Si el panel no puede proteger también las rutas de aplicación, no cargues información sensible ni compartas la demo.
 3. Configura `ASPNETCORE_ENVIRONMENT=Demo`, `Email__CaptureOnly=true` y `Email__CapturePath` como ruta absoluta privada fuera del directorio publicado. No configures SMTP. La aplicación captura mensajes en archivos locales a ese directorio y no expone una página para descargarlos. Esos archivos contienen datos de prueba y enlaces privados: accede a ellos solo desde el administrador de archivos privado, no copies enlaces a tickets, PR, logs o mensajes, y elimina las capturas al terminar la prueba.
 4. El capturador Demo solo se activa con ambas condiciones anteriores. La validación de inicio requiere ruta de capturas absoluta fuera de `wwwroot`; la selección del transporte en Demo usa el capturador únicamente cuando `Email:CaptureOnly=true`. No es un modo válido para piloto: SMTP real debe configurarse y verificarse por separado.
@@ -16,7 +16,7 @@ Primero confirma el host/subdominio asignado y las rutas absolutas que permite e
 | Variable | Valor |
 | --- | --- |
 | `ASPNETCORE_ENVIRONMENT` | `Demo` |
-| `ConnectionStrings__DefaultConnection` | Conexión a la base vacía exclusiva de demo |
+| `ConnectionStrings__DefaultConnection` | Cadena privada para la base exclusiva de demo; se introduce en el panel, no en el paquete |
 | `Application__PublicBaseUrl` | `https://<host-asignado>` |
 | `AllowedHosts` | `<host-asignado>` exacto |
 | `DataProtection__KeysPath` | Ruta absoluta privada y persistente |
@@ -32,9 +32,9 @@ Genera el PFX localmente con una contraseña propia y transfiérelo por el mecan
 
 Publica el ZIP Release en el sitio protegido usando el método que indique el panel. El proyecto excluye `data/`, `wwwroot/uploads/` y `appsettings.Development.json` al publicar, por lo que el artefacto probado no incluye bases, imágenes, capturas, PFX, key ring ni settings locales de desarrollo. No se ha verificado qué administrador de archivos/editor ofrece la cuenta Free ni las rutas admitidas; confirma esto primero con un directorio de prueba sin datos. No coloques archivos de capturas bajo `wwwroot`.
 
-### Aplicar el esquema
+### Estado del esquema
 
-El paquete contiene `migrations.sql`, un script EF idempotente. Comprueba primero que el destino es la base vacía exclusiva. Conserva una exportación si ya hay datos sintéticos, revisa el SQL y aplícalo explícitamente con el cliente SQL que el panel realmente permita (por ejemplo, SSMS si el acceso de red está habilitado). La app no migra automáticamente al arrancar. No ejecutes este script sobre una base real ni sobre una base compartida.
+El paquete contiene `migrations.sql`, un script EF idempotente. El 21-oct-2026 se aplicó a `db74897` por SQL cifrado desde un cliente remoto, con `QUOTED_IDENTIFIER` activado. La consulta posterior encontró las 9 migraciones esperadas, 21 tablas contando `__EFMigrationsHistory` y cero negocios. No vuelvas a aplicarlo manualmente a menos que una comprobación de migraciones pendientes lo indique. La app no migra automáticamente al arrancar. No ejecutes el script en una base con información real o compartida.
 
 Después comprueba `/health/live` y `/health/ready`, la URL HTTPS canónica, una cuenta de demo y los mensajes de prueba capturados. No incluyas la ruta ni contenido de las capturas en el PR.
 
