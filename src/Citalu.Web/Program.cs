@@ -115,7 +115,7 @@ if (forwardedHeadersEnabled)
     {
         options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
         options.ForwardLimit = 1;
-        options.KnownIPNetworks.Clear();
+        options.KnownNetworks.Clear();
         options.KnownProxies.Clear();
         foreach (var address in proxyAddresses)
             if (IPAddress.TryParse(address, out var parsed)) options.KnownProxies.Add(parsed);
@@ -249,9 +249,7 @@ static void ValidateOperationalConfiguration(IConfiguration configuration, IHost
         else
         {
             var webRoot = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "wwwroot"));
-            var fullCapturePath = Path.GetFullPath(capturePath!);
-            var relativePath = Path.GetRelativePath(webRoot, fullCapturePath);
-            if (relativePath == "." || relativePath == ".." || relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || Path.IsPathRooted(relativePath))
+            if (OperationalPathValidator.IsInsideWebRoot(webRoot, capturePath!))
                 missing.Add("Email:CapturePath (must be outside the published web root)");
         }
     }

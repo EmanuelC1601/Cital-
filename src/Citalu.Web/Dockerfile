@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 COPY Citalu.sln ./
 COPY src/Citalu.Domain/Citalu.Domain.csproj src/Citalu.Domain/
@@ -9,7 +9,7 @@ RUN dotnet restore src/Citalu.Web/Citalu.Web.csproj
 COPY src/ src/
 RUN dotnet publish src/Citalu.Web/Citalu.Web.csproj -c Release -o /app/publish --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 EXPOSE 8080
 COPY --from=build /app/publish .

@@ -2,7 +2,7 @@
 
 ## Motor y versiones
 
-La aplicación usa `Microsoft.EntityFrameworkCore.SqlServer` 10.0.13 con EF Core 10 y ASP.NET Core sobre .NET 10. El proveedor oficial documenta soporte para SQL Server 2019 o posterior. La configuración Docker de este proyecto usa SQL Server 2022; la verificación de la entrega 1 se realizó contra SQL Server 2019 Express LocalDB.
+La aplicación usa `Microsoft.EntityFrameworkCore.SqlServer` 9.0.21 con EF Core 9 y ASP.NET Core sobre .NET 9. El proveedor oficial documenta soporte para SQL Server 2019 o posterior. La configuración Docker de este proyecto usa SQL Server 2022; la verificación de la entrega 1 se realizó contra SQL Server 2019 Express LocalDB. EF Core 9 deja de recibir soporte el 10 de noviembre de 2026; la actualización a EF Core 10 queda pendiente de actualizar Visual Studio a 18 o posterior.
 
 ## Windows LocalDB
 

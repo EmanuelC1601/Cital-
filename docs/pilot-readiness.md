@@ -8,7 +8,7 @@ Revisión de capacidades según documentación oficial consultada el 20-oct-2026
 
 | Capacidad | Evidencia del plan Free | Estado para Citalú |
 | --- | --- | --- |
-| .NET | .NET 10 está disponible. Citalu apunta a `net10.0` (SDK de desarrollo 10.0.402). | Compatible. |
+| .NET | El proyecto apunta a `net9.0` y fija SDK 9.0.314 para Visual Studio 2022; el plan informó soporte de .NET 10, pero este cambio se hizo para corregir el error de publicación local. | Validar en el sitio después de configurar su ambiente. .NET 9 termina soporte el 10-nov-2026. |
 | SQL Server | SQL Server 2025 real, una base de 1 GB. LocalDB no es una opción del servidor. | Compatible con EF Core. El 21-oct-2026 se verificó acceso SQL cifrado a `db74897.public.databaseasp.net:1433`; la base `db74897` estaba vacía de tablas de usuario y se aplicaron sus 9 migraciones. No se publicó la aplicación. |
 | Worker persistente | El proceso IIS puede dormir tras 3 horas sin solicitudes. `AlwaysRunning` y las tareas programadas no están disponibles en Free. | **Bloqueo:** el `OutboxProcessor` y `SubscriptionExpiryNotifier` son `BackgroundService`; no se puede garantizar procesamiento oportuno/reanudación sin tráfico. No usar un ping público como sustituto de una garantía de trabajo. |
 | Imágenes y claves | La web tiene 5 GB de almacenamiento de archivos. La guía de despliegue permite archivos en `wwwroot`; no encontramos garantía de que un directorio persistente escribible sobreviva la publicación ni permisos documentados para una ruta externa a `wwwroot`. | Pendiente de verificar desde el panel y sitio de prueba. Nunca subir claves al repositorio. Excluir datos de usuario del artefacto y conservarlos al publicar. |
@@ -52,7 +52,7 @@ Al aprobar una prueba de envío, revisar en el mensaje recibido (no solo la resp
 
 ## Artefacto, migraciones y reversión
 
-En Windows con .NET SDK 10 y `dotnet-ef` del manifiesto local (10.0.13):
+En Windows con el SDK fijado en `global.json` y `dotnet-ef` del manifiesto local (9.0.21):
 
 ```powershell
 dotnet restore Citalu.sln

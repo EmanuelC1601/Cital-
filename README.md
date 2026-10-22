@@ -6,11 +6,11 @@ El nombre comercial es **Citalú**; los nombres técnicos usan **Citalu**. Las r
 
 ## Requisitos
 
-- .NET SDK/runtime de la línea 10.0.
+- .NET SDK/runtime de la línea 9.0; `global.json` fija SDK 9.0.314 para Visual Studio 2022 y la CLI.
 - SQL Server 2019 o posterior; la instancia Docker incluida usa SQL Server 2022.
 - En Windows también puedes usar SQL Server LocalDB 2019 o posterior.
 
-.NET 10 es LTS y recibe soporte hasta el 14 de noviembre de 2028. La solución usa EF Core y su proveedor de SQL Server en 10.0.13 para mantenerse en la misma línea de soporte.
+.NET 9 se usa por compatibilidad con Visual Studio 2022 y el perfil de publicación actual. La solución fija EF Core 9.0.21. **Aviso de soporte:** .NET 9 y EF Core 9 llegan al fin de soporte el 10 de noviembre de 2026; planifica actualizar a .NET 10/EF Core 10 y Visual Studio 18 antes de esa fecha.
 
 ## Ejecutar en desarrollo
 
@@ -46,7 +46,7 @@ Los filtros globales de EF no son la frontera de seguridad. La disponibilidad se
 
 ## Decisiones técnicas
 
-- .NET 10 LTS, ASP.NET Core MVC, Identity y EF Core 10.0.13.
+- .NET 9, ASP.NET Core MVC, Identity y EF Core 9.0.21.
 - SQL Server 2019 o posterior; la verificación se ejecutó en SQL Server 2019 Express LocalDB.
 - Un negocio por propietario en MVP, con entidad separada del usuario de Identity.
 - Prueba inicial de 30 días y zona horaria predeterminada `America/Mexico_City`.

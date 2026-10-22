@@ -2,7 +2,7 @@
 
 ## Entrega 1 — Cuenta y negocio
 
-- [x] Solución modular .NET 10 / EF Core 10.
+- [x] Solución modular .NET 9 / EF Core 9 para compatibilidad con Visual Studio 2022; actualizar a .NET 10 / EF Core 10 antes del fin de soporte de .NET 9.
 - [x] Registro e inicio de sesión del propietario.
 - [x] Alta de un negocio, slug y prueba de 30 días.
 - [x] Consulta del panel filtrada por propietario.
