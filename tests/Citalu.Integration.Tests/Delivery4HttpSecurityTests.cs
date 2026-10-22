@@ -161,7 +161,8 @@ public sealed class Delivery4HttpSecurityTests
                 ["ConnectionStrings:DefaultConnection"] = connection,
                 ["DataProtection:KeysPath"] = Path.Combine(temp, "keys"),
                 ["Email:CapturePath"] = Path.Combine(temp, "capture"),
-                ["Application:PublicBaseUrl"] = "http://localhost"
+                ["Application:PublicBaseUrl"] = "http://localhost",
+                ["AllowedHosts"] = "localhost"
             }));
             builder.ConfigureTestServices(services =>
             {
